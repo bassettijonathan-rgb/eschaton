@@ -234,7 +234,9 @@ describe('the Decision Tree', () => {
     expect(apply(s, { type: 'renouncePact', by: 'AMNAT', pact: 1 }).ok).toBe(false);
     const after = run(s, { type: 'renouncePact', by: 'LIBSYR', pact: 1 });
     expect(after.pacts[0]?.broken).toBe('renounced by LIBSYR');
-    expect(after.log.at(-1)?.text).toBe('LIBSYR renounces its mutual-defence alliance with SOVWAR.');
+    expect(after.log.at(-1)?.text).toBe(
+      'LIBSYR renounces its mutual-defence alliance with SOVWAR.',
+    );
     expect(after.log.at(-1)?.audience).toEqual(['LIBSYR', 'SOVWAR']);
     expect(apply(after, { type: 'renouncePact', by: 'SOVWAR', pact: 1 }).ok).toBe(false);
   });
