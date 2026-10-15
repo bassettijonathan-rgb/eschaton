@@ -13,6 +13,10 @@ This repository is being built milestone by milestone (M0 through M9). So far th
 page draws the four courts with the world on them, every target garment, the
 players, their buckets and Lord's cart; clicking a garment names what it is on
 the map, and the game-master's allocation table shows each Combatant's warheads.
+Viewing as a Combatant, you can take the racquet: pick a launch platform, aim on
+the map, set elevation, topspin and pace, and swing against the timing meter. The
+ball (or a MIRV jockstrap that opens at the top of its arc) flies with real
+tennis-ball physics and detonates where it first touches the court.
 
 ## Running it
 
@@ -47,8 +51,8 @@ CI (`.github/workflows/ci.yml`) runs all of these on every pull request.
 | Path          | What lives there                                                                                                                        |
 | ------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | `src/engine/` | The rules core: pure, deterministic and seeded. No DOM, no Three.js, no `Math.random`, no wall clock (lint enforces this). Unit-tested. |
-| `src/render/` | Three.js scene building: courts, and later the map, garments, players and the lob.                                                      |
-| `src/ui/`     | Page panels, such as the game-master's allocation table.                                                                                |
+| `src/render/` | Three.js scene building: courts, the map, garments, players, and lobs in flight.                                                        |
+| `src/ui/`     | Page panels: the allocation table, the legend, the inspector and the racquet.                                                           |
 | `src/main.ts` | Page entry point.                                                                                                                       |
 | `e2e/`        | Playwright browser tests.                                                                                                               |
 | `docs/`       | `FIDELITY.md`: every reading of the novel the game makes, and why.                                                                      |

@@ -194,6 +194,123 @@ body {
   cursor: pointer;
 }
 
+.lob-panel {
+  left: auto;
+  right: 16px;
+  bottom: 60px;
+  width: min(23rem, calc(100vw - 32px));
+  max-height: calc(100vh - 80px);
+  border-left-color: #c8d64a;
+}
+
+.lob-row {
+  display: grid;
+  grid-template-columns: 6.5rem 1fr 5.5rem;
+  align-items: center;
+  gap: 6px;
+  margin: 3px 0;
+}
+
+.lob-row output {
+  font-size: 0.78rem;
+  color: var(--eta-gray);
+  font-variant-numeric: tabular-nums;
+}
+
+.lob-row .panel-note {
+  grid-column: 1 / 4;
+  margin: 0;
+  font-size: 0.78rem;
+}
+
+.lob-row > button {
+  grid-column: 1 / 3;
+  justify-self: start;
+}
+
+.lob-row input[type='range'] {
+  width: 100%;
+}
+
+.lob-row input[type='number'] {
+  width: 4.5rem;
+  font: inherit;
+}
+
+.lob-panel button {
+  font: inherit;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+
+.lob-panel button[aria-pressed='true'] {
+  background: #ffe066;
+}
+
+.meter {
+  position: relative;
+  height: 22px;
+  margin: 10px 0 6px;
+  background: linear-gradient(90deg, #c96d6d, #e8d48a 42%, #7fbf7f 50%, #e8d48a 58%, #c96d6d);
+  border: 1px solid rgba(29, 35, 38, 0.4);
+}
+
+.meter-sweet {
+  position: absolute;
+  left: calc(50% - 1px);
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: rgba(29, 35, 38, 0.6);
+}
+
+.meter-needle {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 4px;
+  margin-left: -2px;
+  background: var(--ink);
+}
+
+.meter-label {
+  position: absolute;
+  top: 3px;
+  font-size: 0.7rem;
+  color: rgba(29, 35, 38, 0.75);
+}
+
+.meter-label.early {
+  left: 4px;
+}
+
+.meter-label.late {
+  right: 4px;
+}
+
+.lob-panel .swing {
+  width: 100%;
+  padding: 6px;
+  font-weight: bold;
+  letter-spacing: 0.05em;
+}
+
+.lob-problems {
+  min-height: 1em;
+  margin: 6px 0 0;
+  color: var(--eta-red);
+}
+
+.lob-result h3 {
+  margin: 8px 0 4px;
+  font-size: 0.9rem;
+}
+
+.lob-result ul {
+  margin: 0;
+  padding-left: 1.1em;
+}
+
 @media (max-width: 700px) {
   .inspector {
     top: auto;
@@ -201,5 +318,9 @@ body {
   }
   .legend-panel {
     bottom: 64px;
+  }
+  .lob-panel {
+    bottom: 112px;
+    max-height: 45vh;
   }
 }

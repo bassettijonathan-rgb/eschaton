@@ -5,8 +5,11 @@ import type { ApparatusItem } from '../engine/apparatus';
 import { viewBucket, type BallSupply, type Viewer } from '../engine/buckets';
 import { COMBATANTS } from '../engine/data/combatants';
 import { pointValue } from '../engine/data/points';
-import { TARGET_TYPE_LABELS, garmentFor } from '../engine/data/targets';
+import { TARGETS, TARGET_TYPE_LABELS, garmentFor } from '../engine/data/targets';
 import { UNPLAYED_NATIONS } from '../engine/data/worldSituation';
+import { HOWITZER_RANGE_KM, type Detonation, type LobResult } from '../engine/lob';
+import { greatCircleKm } from '../engine/projection';
+import { territoryAt } from '../engine/territory';
 import type { OwnerId, TargetItem } from '../engine/types';
 import { COMBATANT_IDS } from '../engine/types';
 
@@ -75,4 +78,47 @@ export function describeApparatus(
     lines.push(`Stands in ${COMBATANTS[a.owner].name}'s territory.`);
   lines.push(APPARATUS_NOTE);
   return { title: a.label, lines };
+}
+
+const km = (n: number): string => `${n < 10 ? n.toFixed(1) : n.toFixed(0)} km`;
+
+/** One line for where a warhead first touched the court, and what it caught. */
+export function describeDetonation(d: Detonation, items: readonly TargetItem[] = TARGETS): string {
+  const n = `Warhead ${String(d.warhead)}`;
+  if (d.offMap) return `${n} came down off the map, where it does nothing.`;
+  const court = d.court === undefined ? 'between the courts' : `on Court ${String(d.court)}`;
+  const direct = d.hits.filter((h) => h.kind === 'direct').map((h) => h.item.name);
+  const indirect = d.hits.filter((h) => h.kind === 'indirect').map((h) => h.item.name);
+  const parts: string[] = [];
+  if (direct.length > 0) parts.push(`direct hit on ${direct.join(' and ')}`);
+  if (indirect.length > 0)
+    parts.push(
+      `${direct.length > 0 ? 'also catches' : 'catches'} ${indirect.join(', ')} in its kill radius`,
+    );
+  if (parts.length > 0) return `${n} ${court}: ${parts.join('; ')}.`;
+  const where = territoryAt(d.lonLat)?.name;
+  let nearest: TargetItem | undefined;
+  let best = Infinity;
+  for (const t of items) {
+    const dist = greatCircleKm(d.lonLat, t.at);
+    if (dist < best) {
+      best = dist;
+      nearest = t;
+    }
+  }
+  const place = where ? `in ${where}` : 'at sea';
+  const near = nearest ? `, ${km(best)} from ${nearest.name}` : '';
+  return `${n} ${court}: landed ${place}${near}, with nothing in reach.`;
+}
+
+export function describeLob(r: LobResult): Description {
+  const def = COMBATANTS[r.order.combatant];
+  const what =
+    r.order.warheads === 1 ? 'one warhead' : `a jockstrap of ${String(r.order.warheads)} warheads`;
+  const lines = r.detonations.map((d) => describeDetonation(d));
+  if (r.outOfRange > 0)
+    lines.push(
+      `${String(r.outOfRange)} ${r.outOfRange === 1 ? 'shell' : 'shells'} fell beyond the howitzer's ${String(HOWITZER_RANGE_KM)} km and did nothing.`,
+    );
+  return { title: `${def.code} lobs ${what} from ${r.platform.name}`, lines };
 }
