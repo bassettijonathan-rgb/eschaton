@@ -3,8 +3,9 @@
  * Combatant's secrets, everyone else is asked to look away.
  */
 import type { Viewer } from '../engine/buckets';
-import { COMBATANTS } from '../engine/data/combatants';
+import { codeOf, defsFor } from '../engine/scenario';
 import { el } from './dom';
+import { getState } from './store';
 
 export interface HandOff {
   /** Cover the screen and ask for `next` to take it; resolves true once they do, false if cancelled. */
@@ -40,17 +41,24 @@ export function mountHandOff(host: HTMLElement): HandOff {
   return {
     ask(next) {
       settle?.(false);
-      const who =
+      const ws = getState().situation;
+      const names = (
         next.kind === 'gameMaster'
+          ? [ws.cast?.gameMaster]
+          : (ws.cast?.combatants[next.id] ?? []).map((m) => m?.name)
+      ).filter((n): n is string => n !== undefined);
+      const who =
+        (next.kind === 'gameMaster'
           ? 'the game-master'
-          : `${COMBATANTS[next.id].code} (${COMBATANTS[next.id].name})`;
+          : `${codeOf(ws, next.id)} (${defsFor(ws)[next.id].name})`) +
+        (names.length ? `: ${names.join(', ')}` : '');
       title.textContent = `Hand the screen to ${who}`;
       note.textContent =
         next.kind === 'gameMaster'
           ? 'The game-master sees every bucket and every tally.'
           : 'Everyone else, look away: the next screen shows this Combatant’s bucket, profile and messages.';
       take.textContent =
-        next.kind === 'gameMaster' ? 'I am the game-master' : `I am ${COMBATANTS[next.id].code}`;
+        next.kind === 'gameMaster' ? 'I am the game-master' : `I am ${codeOf(ws, next.id)}`;
       cover.hidden = false;
       take.focus();
       return new Promise((resolve) => {

@@ -44,6 +44,15 @@ computers play a whole game" runs one from the World Situation to EndStat's
 winner. The Yushityu shows the Decision Tree's suggestion, and "Appeal to
 Pemulis" shows the full audit trail of any calculation.
 
+The game-master can also start **Interdependence Day, Y.D.A.U.**, the chapter's own
+game. Its World Situation and cast come from the chapter: LaMont Chu, Ann
+Kittenplan, Evan Ingersoll and the rest, with Otis P. Lord in the beanie. Its
+TRIGSIT plays out in order, from the explosions at AMNAT's satellite receivers to
+EndStat's Decision Tree positing a SPASEX response from AMNAT, with LIBSYR becoming
+IRLIBSYR on the way. The first snow of the year falls mid-afternoon and changes
+nothing. Pemulis wins the argument, so a ball that hits a player scores nothing
+and the game runs on to the 1600h siren.
+
 ## Running it
 
 You need Node 22 or later.

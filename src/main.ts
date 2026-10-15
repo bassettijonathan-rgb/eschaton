@@ -5,6 +5,7 @@ import { COMBATANTS } from './engine/data/combatants';
 import { TARGETS } from './engine/data/targets';
 import type { Viewer } from './engine/buckets';
 import { nextComputerAction } from './engine/ai';
+import { codeOf } from './engine/scenario';
 import { itemsOf, type Action } from './engine/game';
 import { platformsFor, solveSpeed, type LobResult } from './engine/lob';
 import { project, unproject } from './engine/projection';
@@ -228,7 +229,7 @@ function start(container: HTMLElement): void {
     if (selected.kind === 'target') {
       const item = TARGETS.find((t) => t.id === selected?.id);
       if (item) {
-        const d = describeTarget(item);
+        const d = describeTarget(item, getState().situation);
         inspector.show({ ...d, lines: [...d.lines, ...describeDamage(item, getState().endstat)] });
       }
     } else {
@@ -296,6 +297,12 @@ function start(container: HTMLElement): void {
         return o;
       }),
     );
+    // A TRIGSIT can rename a Combatant (LIBSYR becomes IRLIBSYR).
+    onStateChange((s) => {
+      for (const o of viewSelect.options)
+        if ((COMBATANT_IDS as readonly string[]).includes(o.value))
+          o.textContent = codeOf(s.situation, o.value as CombatantId);
+    });
     const handOff = mountHandOff(document.body);
     const current = (): string => {
       const v = getViewer();

@@ -42,6 +42,7 @@ import {
 } from './lob';
 import { greatCircleKm, project } from './projection';
 import { createRng, type Rng } from './rng';
+import { codeOf } from './scenario';
 import type { AllocationMethod, CombatantId, TargetItem, TargetType } from './types';
 
 export type Posture = 'spent' | 'hold' | 'counterforce' | 'countervalue';
@@ -85,7 +86,6 @@ export const AI_ELEVATIONS: readonly number[] = [55, 65, 45].map((d) => (d * Mat
 const AI_TOPSPIN = 1500;
 
 const profile = (id: CombatantId) => COMBATANTS[id].headOfState;
-const code = (id: CombatantId): string => COMBATANTS[id].code;
 
 /** Weight of each kind of target when going after an enemy's means to fight. */
 const COUNTERFORCE: Readonly<Partial<Record<TargetType, number>>> = {
@@ -149,6 +149,11 @@ function strikesOn(
     lastAt.set(s.combatant, Math.max(lastAt.get(s.combatant) ?? 0, at));
     if (mine.some((h) => h.item.type === 'MAMA') || s.sacpop) cities = true;
   }
+  for (const i of state.situation.incidents ?? []) {
+    if (i.against !== id || i.by === id) continue;
+    by.set(i.by, (by.get(i.by) ?? 0) + 1);
+    if (!lastAt.has(i.by)) lastAt.set(i.by, state.situation.clock?.start ?? 0);
+  }
   return { by, cities, lastAt };
 }
 
@@ -159,6 +164,7 @@ const pct = (x: number): string => `${String(Math.round(x * 100))}%`;
  * dictate it should do next, with every branch written down.
  */
 export function decisionTree(state: GameState, id: CombatantId): Suggestion {
+  const code = (x: CombatantId): string => codeOf(state.situation, x);
   const p = profile(id);
   const def = COMBATANTS[id];
   const steps: string[] = [];
@@ -180,6 +186,8 @@ export function decisionTree(state: GameState, id: CombatantId): Suggestion {
   // 1. Has anyone struck us?
   const struck = strikesOn(state, id);
   const aggressors = [...struck.by.entries()].sort((a, b) => b[1] - a[1]).map(([x]) => x);
+  for (const i of state.situation.incidents ?? [])
+    if (i.against === id && i.by !== id) steps.push(`In the TRIGSIT, ${code(i.by)} ${i.what}.`);
   steps.push(
     aggressors.length
       ? `Struck by ${aggressors.map((x) => `${code(x)} (${String(struck.by.get(x))})`).join(', ')}${struck.cities ? ', cities among the hits' : ''}.`
@@ -247,7 +255,12 @@ export function decisionTree(state: GameState, id: CombatantId): Suggestion {
           ? 0
           : (COUNTERFORCE[item.type] ?? 1);
     if (weight === 0) continue;
-    let score = pointValue(item) * weight * (directHits.has(item.id) ? 0.3 : 1);
+    let score =
+      pointValue(item) *
+      weight *
+      (directHits.has(item.id) ? 0.3 : 1) *
+      (1 - (state.situation.losses?.[item.id] ?? 0));
+    if (score <= 0) continue;
     const blocks = pactProblems(state, id, item.at);
     let renounce: number | undefined;
     if (blocks.length > 0) {
@@ -467,6 +480,16 @@ function playMove(
       return { type: 'message', from: me, to: aggressor, text };
   }
 
+  // INDPAK demands a recalculation for the weather on the courts, as it does in the chapter.
+  if (
+    me === 'INDPAK' &&
+    state.courtWeather !== 'none' &&
+    !state.log.some((e) =>
+      e.text.startsWith(`${codeOf(state.situation, me)} demands that every kill radius`),
+    )
+  )
+    return { type: 'weatherAppeal', by: me };
+
   const d = decisionTree(state, me);
   if (d.posture === 'hold' || d.posture === 'spent') {
     const t = state.endstat.tallies[me];
@@ -534,7 +557,7 @@ export function nextComputerAction(state: GameState, controllers: Controllers): 
       if (!state.trigsit) {
         if (!gm) return undefined;
         const rng = aiRng(state, 'gm');
-        const pick = TRIGSIT_PRECEDENTS[rng.int(0, TRIGSIT_PRECEDENTS.length - 1)];
+        const pick = ws.trigsit ?? TRIGSIT_PRECEDENTS[rng.int(0, TRIGSIT_PRECEDENTS.length - 1)];
         return pick ? { type: 'setTrigsit', trigsit: pick } : undefined;
       }
       const id = cpus.find((x) => !state.trigsitAgreedBy.includes(x));
@@ -542,6 +565,8 @@ export function nextComputerAction(state: GameState, controllers: Controllers): 
       return undefined;
     }
     case 'summit': {
+      const posit = unposited(state);
+      if (posit && gm) return positFor(state, posit);
       for (const id of cpus) {
         const a = summitMove(state, id);
         if (a) return a;
@@ -550,6 +575,8 @@ export function nextComputerAction(state: GameState, controllers: Controllers): 
     }
     case 'play': {
       if (state.pending.length > 0) return undefined;
+      const posit = unposited(state);
+      if (posit && gm) return positFor(state, posit);
       const start = state.log.length % Math.max(1, cpus.length);
       for (let k = 0; k < cpus.length; k++) {
         const id = cpus[(start + k) % cpus.length];
@@ -561,6 +588,31 @@ export function nextComputerAction(state: GameState, controllers: Controllers): 
       return gm ? { type: 'advanceClock', minutes: 15 } : undefined;
     }
   }
+}
+
+/** The Combatant the TRIGSIT asks the Decision Tree about, if the game-master has not yet run it. */
+export function unposited(state: GameState): CombatantId | undefined {
+  return state.trigsit?.events
+    .map((e) => e.posit)
+    .find(
+      (id): id is CombatantId =>
+        id !== undefined && state.situation.combatants.includes(id) && !state.posited.includes(id),
+    );
+}
+
+/** The game-master says aloud what the Decision Tree dictates for a Combatant. */
+export function positFor(state: GameState, id: CombatantId): Action {
+  const d = decisionTree(state, id);
+  const against = d.against.map((x) => codeOf(state.situation, x)).join(' and ');
+  const text =
+    d.posture === 'counterforce'
+      ? `a SPASEX response against ${against}: a limited exchange at military targets${d.target ? `, beginning with ${d.target.name}` : ''}.`
+      : d.posture === 'countervalue'
+        ? `SACPOP against ${against}${d.target ? `, beginning with ${d.target.name}` : ''}.`
+        : d.posture === 'hold'
+          ? 'hold, and let the other side move first.'
+          : 'nothing: there is nothing left to lob.';
+  return { type: 'posit', for: id, text };
 }
 
 /** Let the computers play until the game ends, or until they wait on a person. */

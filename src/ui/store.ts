@@ -3,14 +3,21 @@
  * the panels dispatch. Every change goes through the engine's reducer, so
  * the game on screen is always one that replays from its seed and log.
  */
-import { DEFAULT_WORLD_SITUATION } from '../engine/data/worldSituation';
+import { scenarioById } from '../engine/data/scenarios';
 import { apply, newGame, type Action, type GameState, type Outcome } from '../engine/game';
 import type { LaunchOrder, LobResult } from '../engine/lob';
 import type { AllocationMethod } from '../engine/types';
 
 export type PageState = GameState;
 
-let state: GameState = newGame(DEFAULT_WORLD_SITUATION);
+/** The World Situation this page plays: `?scenario=` in the address picks one. */
+const situation = scenarioById(
+  typeof location === 'undefined'
+    ? undefined
+    : new URLSearchParams(location.search).get('scenario'),
+);
+
+let state: GameState = newGame(situation);
 let actions: Action[] = [];
 const listeners = new Set<(s: GameState) => void>();
 
@@ -58,7 +65,7 @@ export function onStateChange(fn: (s: GameState) => void): () => void {
 
 /** Start again from a fresh game (tests and the practice button use this). */
 export function resetGame(): void {
-  state = newGame(DEFAULT_WORLD_SITUATION);
+  state = newGame(situation);
   actions = [];
   for (const fn of listeners) fn(state);
 }

@@ -18,7 +18,6 @@ import { checkMove, itemsNow } from './axiom';
 import { fillBuckets, takeFromBucket, type BallSupply } from './buckets';
 import { COMBATANTS } from './data/combatants';
 import { TARGETS } from './data/targets';
-import type { Trigsit } from './data/trigsits';
 import { endstatKillRadius } from './effects';
 import { computeEndStat, type EndStatReport } from './endstat';
 import {
@@ -31,6 +30,7 @@ import {
 } from './lob';
 import { kmToCourtMetres, project } from './projection';
 import { createRng } from './rng';
+import { applyChanges, codeOf, defsFor, itemsIn, ownerIn, renameCodes } from './scenario';
 import { ownerAt } from './territory';
 import type {
   AllocationMethod,
@@ -39,6 +39,7 @@ import type {
   OwnerId,
   Precipitation,
   TargetItem,
+  Trigsit,
   WorldSituation,
 } from './types';
 
@@ -167,7 +168,9 @@ export type Action =
   | { readonly type: 'statement'; readonly by: CombatantId; readonly text: string }
   | { readonly type: 'declinePact'; readonly by: CombatantId; readonly pact: number }
   | { readonly type: 'renouncePact'; readonly by: CombatantId; readonly pact: number }
-  | { readonly type: 'weatherAppeal'; readonly by: CombatantId };
+  | { readonly type: 'weatherAppeal'; readonly by: CombatantId }
+  /** The game-master says what EndStat's Decision Tree dictates for a Combatant, as the TRIGSIT has it. */
+  | { readonly type: 'posit'; readonly for: CombatantId; readonly text: string };
 
 /** An order or message waiting for a human game-master's ruling (A14). */
 export interface PendingRuling {
@@ -222,6 +225,8 @@ export interface GameState {
   readonly failedDrafts: number;
   /** What each Combatant has said in public: at the summit, claims about itself are bluffs or not. */
   readonly statements: readonly Statement[];
+  /** Combatants the game-master has run the Decision Tree for in public, as the TRIGSIT asks. */
+  readonly posited: readonly CombatantId[];
 }
 
 export interface Statement {
@@ -296,25 +301,26 @@ export function newGame(
     pending: [],
     nextId: 1,
     rng: createRng(situation.seed + 1).state(),
-    endstat: computeEndStat(situation, COMBATANTS, allocation, []),
+    endstat: computeEndStat(situation, defsFor(situation), allocation, []),
     ended: undefined,
     positions: {},
     courtWeather: 'none',
     rejectedBy: [],
     failedDrafts: 0,
     statements: [],
+    posited: [],
   };
 }
 
 /** The garments as they lie in this game. */
 export function itemsOf(state: GameState): TargetItem[] {
-  return itemsNow(TARGETS, state.positions);
+  return itemsIn(state.situation, itemsNow(TARGETS, state.positions));
 }
 
 const refuse = (state: GameState, ...problems: string[]): Outcome => ({
   state,
   ok: false,
-  problems,
+  problems: problems.map((p) => renameCodes(state.situation, p)),
 });
 const done = (state: GameState, extra: Partial<Outcome> = {}): Outcome => ({
   state,
@@ -324,8 +330,12 @@ const done = (state: GameState, extra: Partial<Outcome> = {}): Outcome => ({
 });
 const say = (state: GameState, text: string, audience: Audience = 'all'): GameState => ({
   ...state,
-  log: [...state.log, { at: state.clock, text, audience }],
+  log: [...state.log, { at: state.clock, text: renameCodes(state.situation, text), audience }],
 });
+
+/** Who rules from outside the fence, when the scenario names him. */
+const emeritus = (state: GameState): string =>
+  state.situation.cast ? ` from ${state.situation.cast.emeritus}, outside the fence` : '';
 
 function isPlaying(state: GameState, id: OwnerId | undefined): id is CombatantId {
   return id !== undefined && (state.situation.combatants as readonly string[]).includes(id);
@@ -405,7 +415,7 @@ export function launchProblems(state: GameState, order: LaunchOrder): Problem[] 
   if (atCity && level < CITY_DEFCON)
     problems.push(soft(`aiming at a city needs ${defconLabel(CITY_DEFCON)}`));
   problems.push(...pactProblems(state, by, order.aimAt));
-  return problems;
+  return problems.map((p) => ({ ...p, text: renameCodes(state.situation, p.text) }));
 }
 
 /**
@@ -417,7 +427,7 @@ export function pactProblems(state: GameState, by: CombatantId, aimAt: LonLat): 
   const problems: Problem[] = [];
   const ugc = state.beanie === 'red';
   const target = declaredTarget(aimAt, itemsOf(state));
-  const victim = target?.owner ?? ownerAt(aimAt);
+  const victim = target?.owner ?? ownerIn(state.situation, ownerAt(aimAt));
   const atCity = target?.type === 'MAMA';
   if (!ugc && isPlaying(state, victim) && victim !== by) {
     const c = state.cessation;
@@ -503,7 +513,13 @@ function flyLaunch(state: GameState, order: LaunchOrder, ruledBy?: 'god'): Outco
     items,
   });
   const lobs = [...state.lobs, lob];
-  const endstat = computeEndStat(state.situation, COMBATANTS, state.allocation, lobs, items);
+  const endstat = computeEndStat(
+    state.situation,
+    defsFor(state.situation),
+    state.allocation,
+    lobs,
+    items,
+  );
   let s: GameState = {
     ...state,
     rng: rng.state(),
@@ -537,6 +553,11 @@ function flyLaunch(state: GameState, order: LaunchOrder, ruledBy?: 'god'): Outco
     s = say(
       s,
       `${struck.length === 1 ? 'The ball' : `${String(struck.length)} warheads`} struck ${first.label}: the apparatus of the game, not the territory. Logged off the map; nothing scores.`,
+    );
+  if (first && (first.kind === 'player' || first.kind === 'racquet' || first.kind === 'gameMaster'))
+    s = say(
+      s,
+      `Ruling${emeritus(s) || ' from Pemulis'}: you can only launch against the territory, and a person is not on the map. EndStat has no INDDIR or SUFDDIR for anybody real${s.cessation ? ', and a parley under the white beanie makes nobody a target' : ''}. ${s.beanie === 'gray' ? 'The beanie stays gray and play goes on.' : 'Play goes on.'}`,
     );
 
   // Pacts the strike sets off or breaks.
@@ -612,7 +633,61 @@ function sendMessage(
   );
 }
 
+/**
+ * The TRIGSIT stands: its events happen in order, each raising DEFCONs and
+ * changing the World Situation as it says, and the summit opens.
+ */
+function trigsitStands(state: GameState): GameState {
+  const trigsit = state.trigsit;
+  if (!trigsit) return state;
+  let s: GameState = state;
+  const raise = (ids: readonly CombatantId[]): CombatantId[] => {
+    const raised = ids.filter((id) => s.situation.combatants.includes(id));
+    const defcon = { ...s.defcon };
+    for (const id of raised)
+      defcon[id] = Math.min(MAXIMUM_READINESS, (defcon[id] ?? STARTING_DEFCON) + 1) as Defcon;
+    s = { ...s, defcon };
+    return raised;
+  };
+  const scripted = trigsit.events.some((e) => e.raise || e.changes || e.posit);
+  if (scripted)
+    for (const [i, e] of trigsit.events.entries()) {
+      s = say(s, `TRIGSIT ${String(i + 1)}: ${e.text}`);
+      if (e.changes) s = { ...s, situation: applyChanges(s.situation, e.changes) };
+      const raised = raise(e.raise ?? []);
+      if (raised.length)
+        s = say(
+          s,
+          `${raised.map((id) => `${codeOf(s.situation, id)} goes to ${defconLabel(s.defcon[id] ?? STARTING_DEFCON)}`).join('; ')}.`,
+        );
+    }
+  s = say(
+    { ...s, phase: 'summit' },
+    'The TRIGSIT stands. The summit opens over purified water and unfatted chips.',
+  );
+  const raised = raise(trigsit.raise ?? []);
+  if (raised.length)
+    s = say(s, `As the TRIGSIT has it, ${raised.map(code).join(' and ')} go up one DEFCON.`);
+  return s;
+}
+
+/** Real weather the scenario brings to the courts as the clock passes it. It changes nothing EndStat computes. */
+function weatherDue(before: number, state: GameState): GameState {
+  let s = state;
+  for (const w of state.situation.courtWeatherAt ?? []) {
+    if (before < w.at && state.clock >= w.at && s.courtWeather !== w.precipitation)
+      s = say({ ...s, courtWeather: w.precipitation }, w.text);
+  }
+  return s;
+}
+
 export function apply(state: GameState, action: Action): Outcome {
+  const o = reduce(state, action);
+  if (!o.ok || o.state.clock === state.clock) return o;
+  return { ...o, state: weatherDue(state.clock, o.state) };
+}
+
+function reduce(state: GameState, action: Action): Outcome {
   const ws = state.situation;
   const needCombatant = (id: CombatantId): string[] =>
     isPlaying(state, id) ? [] : [`${code(id)} is not playing`];
@@ -675,7 +750,7 @@ export function apply(state: GameState, action: Action): Outcome {
         return refuse(state, 'A TRIGSIT is set after the World Situation and before the summit');
       const s = say(
         { ...state, trigsit: action.trigsit, trigsitAgreedBy: [] },
-        `TRIGSIT proposed: ${action.trigsit.title}. ${action.trigsit.events.join(' ')}`,
+        `TRIGSIT proposed: ${action.trigsit.title}. ${action.trigsit.events.map((e) => e.text).join(' ')}`,
       );
       return done(s);
     }
@@ -689,18 +764,7 @@ export function apply(state: GameState, action: Action): Outcome {
         return refuse(state, `${code(action.by)} has already agreed`);
       let s: GameState = { ...state, trigsitAgreedBy: [...state.trigsitAgreedBy, action.by] };
       s = say(s, `${code(action.by)} agrees to the TRIGSIT.`);
-      if (s.trigsitAgreedBy.length >= quorum(ws)) {
-        const raised = (s.trigsit?.raise ?? []).filter((id) => ws.combatants.includes(id));
-        const defcon = { ...s.defcon };
-        for (const id of raised)
-          defcon[id] = Math.min(MAXIMUM_READINESS, (defcon[id] ?? STARTING_DEFCON) + 1) as Defcon;
-        s = say(
-          { ...s, phase: 'summit', defcon },
-          'The TRIGSIT stands. The summit opens over purified water and unfatted chips.',
-        );
-        if (raised.length)
-          s = say(s, `As the TRIGSIT has it, ${raised.map(code).join(' and ')} go up one DEFCON.`);
-      }
+      if (s.trigsitAgreedBy.length >= quorum(ws)) s = trigsitStands(s);
       return done(s);
     }
 
@@ -969,6 +1033,19 @@ export function apply(state: GameState, action: Action): Outcome {
       return done(say({ ...state, courtWeather: action.precipitation }, text));
     }
 
+    case 'posit': {
+      if (state.phase !== 'summit' && state.phase !== 'play')
+        return refuse(state, 'The Decision Tree is run once the TRIGSIT stands');
+      const p = needCombatant(action.for);
+      if (p.length) return refuse(state, ...p);
+      return done(
+        say(
+          { ...state, posited: [...state.posited, action.for] },
+          `${state.situation.cast?.gameMaster ?? 'The game-master'} runs EndStat's Decision Tree for ${code(action.for)}, and it dictates: ${action.text}`,
+        ),
+      );
+    }
+
     case 'weatherAppeal': {
       if (state.phase === 'ended') return refuse(state, 'The game is over');
       const p = needCombatant(action.by);
@@ -978,7 +1055,7 @@ export function apply(state: GameState, action: Action): Outcome {
       return done(
         say(
           state,
-          `${code(action.by)} demands that every kill radius be recalculated for the ${state.courtWeather}. Ruling: it is ${state.courtWeather === 'snow' ? 'snowing' : 'raining'} on the map, not the territory. Nothing is recalculated.`,
+          `${code(action.by)} demands that every kill radius be recalculated for the ${state.courtWeather}. Ruling${emeritus(state)}: it is ${state.courtWeather === 'snow' ? 'snowing' : 'raining'} on the map, not the territory. Nothing is recalculated.`,
         ),
       );
     }

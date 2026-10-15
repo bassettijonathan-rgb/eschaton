@@ -7,7 +7,9 @@
  */
 import { COMBATANTS } from '../engine/data/combatants';
 import { MOBILE_RANGE_KM, TARGETS } from '../engine/data/targets';
-import { TRIGSIT_PRECEDENTS } from '../engine/data/trigsits';
+import { positFor, unposited } from '../engine/ai';
+import { SCENARIOS } from '../engine/data/scenarios';
+import { TRIGSIT_PRECEDENTS, type Trigsit } from '../engine/data/trigsits';
 import {
   MAXIMUM_READINESS,
   PACT_LABELS,
@@ -26,6 +28,7 @@ import {
   type PendingRuling,
 } from '../engine/game';
 import { platformsFor } from '../engine/lob';
+import { codeOf } from '../engine/scenario';
 import type { CombatantId, LonLat, Precipitation } from '../engine/types';
 import { el } from './dom';
 import {
@@ -59,7 +62,10 @@ const BEANIE_LABELS: Readonly<Record<Beanie, string>> = {
 };
 
 const DEFCONS: readonly Defcon[] = [1, 2, 3, 4, 5, 6];
-const code = (id: CombatantId): string => COMBATANTS[id].code;
+const code = (id: CombatantId): string => codeOf(getState().situation, id);
+/** The TRIGSITs the game-master can propose: the scenario's own, or the precedents. */
+const trigsitsFor = (s: GameState): readonly Trigsit[] =>
+  s.situation.trigsit ? [s.situation.trigsit] : TRIGSIT_PRECEDENTS;
 const list = (ids: readonly CombatantId[]): string =>
   ids.length ? ids.map(code).join(', ') : 'nobody yet';
 
@@ -116,7 +122,7 @@ export function mountGamePanel(host: HTMLElement, options: GamePanelOptions): vo
   let theirCity: string | undefined;
   let messageTo: CombatantId | undefined;
   let draft = '';
-  let trigsitPick = TRIGSIT_PRECEDENTS[0]?.id ?? '';
+  let trigsitPick = trigsitsFor(getState())[0]?.id ?? '';
   let shipPick: string | undefined;
   let cessationA: CombatantId | undefined;
   let cessationB: CombatantId | undefined;
@@ -152,14 +158,26 @@ export function mountGamePanel(host: HTMLElement, options: GamePanelOptions): vo
       }),
     );
 
+  /** Who is on the team, when the scenario names them. */
+  const team = (id: CombatantId, s: GameState): HTMLElement[] => {
+    const cast = s.situation.cast?.combatants[id];
+    if (!cast) return [];
+    const roles = COMBATANTS[id].roles;
+    const names = cast.flatMap((m, i) =>
+      m ? [`${m.name} (${m.role ?? roles[i] ?? 'player'})`] : [],
+    );
+    return names.length ? [el('li', { id: 'team' }, [`Team: ${names.join(', ')}.`])] : [];
+  };
+
   const profile = (id: CombatantId, s: GameState): HTMLElement => {
     const def = COMBATANTS[id];
     const line = s.allocation.lines.find((l) => l.combatant === id);
     const h = def.headOfState;
     const pct = (x: number): string => `${String(Math.round(x * 100))}%`;
     return el('details', { className: 'profile', id: 'profile' }, [
-      el('summary', {}, [`Your profile: ${def.code}, ${def.name}`]),
+      el('summary', {}, [`Your profile: ${code(id)}, ${def.name}`]),
       el('ul', {}, [
+        ...team(id, s),
         el('li', {}, [`${h.title}: ${h.summary}`]),
         el('li', {}, [
           `Resolve ${pct(h.resolve)}, risk tolerance ${pct(h.riskTolerance)}, pact fidelity ${pct(h.pactFidelity)}, bluffing ${pct(h.bluffing)}, SACPOP readiness ${pct(h.sacpopReadiness)}.`,
@@ -461,6 +479,25 @@ export function mountGamePanel(host: HTMLElement, options: GamePanelOptions): vo
     ];
   };
 
+  /** Start a new game from another World Situation: the page reloads with it. */
+  const scenarioPicker = (s: GameState): HTMLElement => {
+    const pick = select(
+      'scenario',
+      SCENARIOS.map((x) => ({ value: x.id, label: x.title })),
+      s.situation.id,
+    );
+    return el('div', { className: 'game-row' }, [
+      el('label', { htmlFor: 'scenario' }, ['New game ']),
+      pick,
+      ' ',
+      button('Start it', 'start-scenario', () => {
+        const url = new URL(window.location.href);
+        url.searchParams.set('scenario', pick.value);
+        window.location.assign(url.toString());
+      }),
+    ]);
+  };
+
   const computers = (s: GameState): HTMLElement[] => {
     const boxes = s.situation.combatants.map((id) => {
       const box = el('input', { type: 'checkbox', id: `cpu-${id}`, checked: isComputer(id) });
@@ -595,13 +632,15 @@ export function mountGamePanel(host: HTMLElement, options: GamePanelOptions): vo
         .filter((id) => !s.endorsedBy.includes(id))
         .slice(0, q - s.endorsedBy.length))
         actions.push({ type: 'endorse', by });
-    const precedent = TRIGSIT_PRECEDENTS[0];
+    const precedent = trigsitsFor(s)[0];
     if (precedent && (s.phase === 'worldSituation' || (s.phase === 'trigsit' && !s.trigsit)))
       actions.push({ type: 'setTrigsit', trigsit: precedent });
     if (s.phase !== 'summit')
       for (const by of ids.slice(0, q)) actions.push({ type: 'agreeTrigsit', by });
     actions.push({ type: 'closeSummit' });
     for (const a of actions) dispatch(a);
+    const posit = unposited(getState());
+    if (posit) dispatch(positFor(getState(), posit));
     feedback = '';
     render();
   };
@@ -621,6 +660,18 @@ export function mountGamePanel(host: HTMLElement, options: GamePanelOptions): vo
     if (viewer.kind === 'combatant' && !me)
       parts.push(
         el('p', { className: 'panel-note' }, [`${code(viewer.id)} is not playing this game.`]),
+      );
+
+    if (s.trigsit && s.phase !== 'trigsit')
+      parts.push(
+        el('details', { className: 'trigsit-standing', id: 'trigsit-standing' }, [
+          el('summary', {}, [`The TRIGSIT: ${s.trigsit.title}`]),
+          el(
+            'ol',
+            {},
+            s.trigsit.events.map((e) => el('li', {}, [e.text])),
+          ),
+        ]),
       );
 
     const q = quorum(s.situation);
@@ -649,7 +700,7 @@ export function mountGamePanel(host: HTMLElement, options: GamePanelOptions): vo
         if (isGm) {
           const pick = select(
             'trigsit-pick',
-            TRIGSIT_PRECEDENTS.map((t) => ({ value: t.id, label: t.title })),
+            trigsitsFor(s).map((t) => ({ value: t.id, label: t.title })),
             trigsitPick,
           );
           pick.addEventListener('change', () => {
@@ -657,11 +708,13 @@ export function mountGamePanel(host: HTMLElement, options: GamePanelOptions): vo
           });
           parts.push(
             el('div', { className: 'game-row' }, [
-              el('label', { htmlFor: 'trigsit-pick' }, ['Precedent ']),
+              el('label', { htmlFor: 'trigsit-pick' }, [
+                s.situation.trigsit ? 'This game’s TRIGSIT ' : 'Precedent ',
+              ]),
               pick,
               ' ',
               button('Propose this TRIGSIT', 'propose-trigsit', () => {
-                const t = TRIGSIT_PRECEDENTS.find((x) => x.id === trigsitPick);
+                const t = trigsitsFor(s).find((x) => x.id === trigsitPick);
                 if (t) act({ type: 'setTrigsit', trigsit: t });
               }),
             ]),
@@ -671,9 +724,9 @@ export function mountGamePanel(host: HTMLElement, options: GamePanelOptions): vo
           parts.push(
             el('h3', { id: 'trigsit-title' }, [`TRIGSIT: ${s.trigsit.title}`]),
             el(
-              'ul',
-              {},
-              s.trigsit.events.map((e) => el('li', {}, [e])),
+              'ol',
+              { id: 'trigsit-events' },
+              s.trigsit.events.map((e) => el('li', {}, [e.text])),
             ),
             el('p', {}, [
               `Agreed by ${list(s.trigsitAgreedBy)} (${String(s.trigsitAgreedBy.length)} of the ${String(q)} needed).`,
@@ -766,6 +819,16 @@ export function mountGamePanel(host: HTMLElement, options: GamePanelOptions): vo
         );
         break;
     }
+    const posit = unposited(s);
+    if (isGm && posit && (s.phase === 'summit' || s.phase === 'play'))
+      parts.push(
+        el('div', { className: 'game-row' }, [
+          `The TRIGSIT asks what EndStat’s Decision Tree dictates for ${code(posit)}. `,
+          button(`Run the Decision Tree for ${code(posit)}`, 'posit', () => {
+            act(positFor(getState(), posit));
+          }),
+        ]),
+      );
     if (isGm && s.phase !== 'ended') {
       parts.push(courtWeather(s), humanGodToggle(s), ...computers(s));
       if (s.phase !== 'play')
@@ -775,6 +838,7 @@ export function mountGamePanel(host: HTMLElement, options: GamePanelOptions): vo
           }),
         );
     }
+    if (isGm) parts.push(scenarioPicker(s));
     const fb = el('p', { className: 'game-feedback', id: 'game-feedback' }, [feedback]);
     fb.setAttribute('role', 'status');
     parts.push(fb, logSection(s));

@@ -11,10 +11,13 @@ import { COMBATANTS } from '../engine/data/combatants';
 import type { GameState } from '../engine/game';
 import type { CombatantId } from '../engine/types';
 import type { EndStatReport } from '../engine/endstat';
+import { codeOf } from '../engine/scenario';
 import { describeStrike, formatRatio } from './describe';
 import { el } from './dom';
 import { getState, onStateChange } from './store';
 import { getViewer, onViewerChange } from './viewer';
+
+const codeNow = (id: CombatantId): string => codeOf(getState().situation, id);
 
 /** EndStat takes about three hours to confirm a winner. */
 export const AUTHENTIC_CRUNCH_SECONDS = 3 * 60 * 60;
@@ -29,7 +32,7 @@ function talliesTable(report: EndStatReport, viewer: Viewer): HTMLTableElement {
     .map((t) => {
       const comm = report.comm[t.combatant];
       const row = el('tr', {}, [
-        el('th', { scope: 'row' }, [COMBATANTS[t.combatant].code, ...(t.wentSacpop ? [' ☢'] : [])]),
+        el('th', { scope: 'row' }, [codeNow(t.combatant), ...(t.wentSacpop ? [' ☢'] : [])]),
         el('td', { className: 'num' }, [pts(t.inddir)]),
         el('td', { className: 'num' }, [pts(t.sufddir)]),
         el('td', { className: 'num' }, [formatRatio(t)]),
@@ -88,9 +91,7 @@ function treeView(state: GameState, id: CombatantId): HTMLElement {
   const d = decisionTree(state, id);
   const what = d.target && d.platform ? ` Target: ${d.target.name}, from ${d.platform.name}.` : '';
   return el('div', { id: 'decision-tree' }, [
-    el('p', { id: 'decision-posture' }, [
-      `${COMBATANTS[id].code}: ${POSTURE_LABELS[d.posture]}.${what}`,
-    ]),
+    el('p', { id: 'decision-posture' }, [`${codeNow(id)}: ${POSTURE_LABELS[d.posture]}.${what}`]),
     el(
       'ol',
       { className: 'strike-log' },
@@ -113,10 +114,10 @@ export function auditTrail(state: GameState, viewer: Viewer): string[] {
       : state.situation.combatants.filter((id) => id === viewer.id);
   for (const line of state.allocation.lines)
     if (ids.includes(line.combatant))
-      lines.push(`${COMBATANTS[line.combatant].code}:`, ...line.steps.map((x) => `  ${x}`));
+      lines.push(`${codeNow(line.combatant)}:`, ...line.steps.map((x) => `  ${x}`));
   lines.push('', 'DECISION TREE');
   for (const id of ids)
-    lines.push(`${COMBATANTS[id].code}:`, ...decisionTree(state, id).steps.map((x) => `  ${x}`));
+    lines.push(`${codeNow(id)}:`, ...decisionTree(state, id).steps.map((x) => `  ${x}`));
   lines.push('', 'STRIKES');
   for (const strike of state.endstat.strikes) lines.push(...strike.working);
   if (state.endstat.strikes.length === 0) lines.push('Nothing has been lobbed yet.');
@@ -126,7 +127,7 @@ export function auditTrail(state: GameState, viewer: Viewer): string[] {
     const t = state.endstat.tallies[viewer.id];
     if (t) {
       lines.push(
-        `${COMBATANTS[t.combatant].code}: INDDIR ${pts(t.inddirRaw)} raw, SUFDDIR ${pts(t.sufddirRaw)} raw.`,
+        `${codeNow(t.combatant)}: INDDIR ${pts(t.inddirRaw)} raw, SUFDDIR ${pts(t.sufddirRaw)} raw.`,
         ...t.corrections.map(
           (c) => `  ${c.name} on ${c.appliesTo}: × ${c.factor.toFixed(3)} (${c.reason})`,
         ),
@@ -214,7 +215,7 @@ function mountCrunch(host: HTMLElement): (authentic: boolean) => void {
         verdict.replaceChildren(
           el('p', {}, [
             w
-              ? `Winner: ${COMBATANTS[w].code} (${COMBATANTS[w].name}), INDDIR : SUFDDIR ${formatRatio(report.tallies[w] ?? { ratio: undefined })}.`
+              ? `Winner: ${codeNow(w)} (${COMBATANTS[w].name}), INDDIR : SUFDDIR ${formatRatio(report.tallies[w] ?? { ratio: undefined })}.`
               : 'No winner: no Combatant has inflicted anything on another.',
           ]),
           talliesTable(report, { kind: 'gameMaster' }),
@@ -248,9 +249,7 @@ export function mountYushityu(host: HTMLElement): Yushityu {
   const tree = el('div', {});
   const treeFor = el('select', { id: 'tree-for' });
   treeFor.append(
-    ...getState().situation.combatants.map((id) =>
-      el('option', { value: id }, [COMBATANTS[id].code]),
-    ),
+    ...getState().situation.combatants.map((id) => el('option', { value: id }, [codeNow(id)])),
   );
   const treeRow = el('div', { className: 'crunch-controls' }, [
     el('label', { htmlFor: 'tree-for' }, ['For ']),
