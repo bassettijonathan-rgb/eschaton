@@ -599,3 +599,174 @@ body {
     max-height: 40vh;
   }
 }
+
+/* The masthead's toolbar: finder, rulebook, introduction, sound. */
+.toolbar {
+  position: fixed;
+  top: 12px;
+  right: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+  max-width: calc(100vw - 36rem - 48px);
+  padding: 8px 10px;
+  background: rgba(244, 241, 232, 0.92);
+  border-right: 4px solid var(--eta-red);
+  font-size: 0.85rem;
+  pointer-events: auto;
+}
+
+.toolbar select,
+.toolbar button {
+  font: inherit;
+  max-width: 16rem;
+}
+
+.toolbar button {
+  padding: 3px 10px;
+  cursor: pointer;
+}
+
+.toolbar [aria-pressed='false'] {
+  color: var(--eta-gray);
+}
+
+@media (max-width: 1000px) {
+  .toolbar {
+    position: static;
+    max-width: none;
+    margin-top: 6px;
+    padding: 0;
+    background: none;
+    border: 0;
+    justify-content: flex-start;
+  }
+  /* The toolbar now sits in the masthead, so the clipboard starts lower. */
+  .game-panel {
+    top: 215px;
+    max-height: calc(100vh - 300px);
+  }
+}
+
+@media (max-width: 700px) {
+  .game-panel {
+    max-height: 40vh;
+  }
+}
+
+/* Visible to screen readers only. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Keyboard focus is always visible. */
+:focus-visible {
+  outline: 3px solid #f2b705;
+  outline-offset: 2px;
+}
+
+#theater canvas:focus-visible {
+  outline-offset: -3px;
+}
+
+/* The rulebook and the introduction. */
+dialog.rulebook,
+dialog.welcome {
+  border: 0;
+  border-top: 6px solid var(--eta-red);
+  padding: 0;
+  background: var(--paper);
+  color: var(--ink);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+}
+
+dialog.rulebook::backdrop,
+dialog.welcome::backdrop {
+  background: rgba(29, 35, 38, 0.55);
+}
+
+dialog.rulebook {
+  width: min(48rem, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+}
+
+.rulebook-head {
+  position: sticky;
+  top: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 20px;
+  background: var(--paper);
+  border-bottom: 1px solid #d6d0c2;
+}
+
+.rulebook-head h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.rulebook nav,
+.rulebook-body {
+  padding: 4px 20px 12px;
+  line-height: 1.5;
+}
+
+.rulebook-contents {
+  columns: 2 16rem;
+  font-size: 0.9rem;
+}
+
+.rulebook-body h3 {
+  margin: 18px 0 6px;
+  font-size: 1rem;
+}
+
+.rulebook-body section ul {
+  padding-left: 1.2rem;
+}
+
+.rulebook button,
+.welcome button {
+  font: inherit;
+  padding: 4px 12px;
+  cursor: pointer;
+}
+
+dialog.welcome {
+  width: min(32rem, calc(100vw - 32px));
+  padding: 18px 22px;
+  line-height: 1.5;
+}
+
+.welcome h2 {
+  margin: 0 0 6px;
+  font-size: 1.2rem;
+}
+
+.welcome-step {
+  margin: 0;
+  color: var(--eta-gray);
+  font-size: 0.85rem;
+}
+
+.welcome-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 12px;
+}
+
+.welcome-actions [hidden] {
+  display: none;
+}

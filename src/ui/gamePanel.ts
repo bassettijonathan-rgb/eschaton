@@ -28,6 +28,7 @@ import {
   type PendingRuling,
 } from '../engine/game';
 import { platformsFor } from '../engine/lob';
+import { destinationPoint } from '../engine/projection';
 import { codeOf } from '../engine/scenario';
 import type { CombatantId, LonLat, Precipitation } from '../engine/types';
 import { el } from './dom';
@@ -62,6 +63,16 @@ const BEANIE_LABELS: Readonly<Record<Beanie, string>> = {
 };
 
 const DEFCONS: readonly Defcon[] = [1, 2, 3, 4, 5, 6];
+const COMPASS = [
+  'north',
+  'north-east',
+  'east',
+  'south-east',
+  'south',
+  'south-west',
+  'west',
+  'north-west',
+].map((label, i) => ({ value: i * 45, label }));
 const code = (id: CombatantId): string => codeOf(getState().situation, id);
 /** The TRIGSITs the game-master can propose: the scenario's own, or the precedents. */
 const trigsitsFor = (s: GameState): readonly Trigsit[] =>
@@ -452,6 +463,15 @@ export function mountGamePanel(host: HTMLElement, options: GamePanelOptions): vo
     sel.addEventListener('change', () => {
       shipPick = sel.value;
     });
+    const heading = select('move-bearing', COMPASS, 0);
+    const distance = el('input', {
+      type: 'number',
+      id: 'move-km',
+      min: '1',
+      max: String(MOBILE_RANGE_KM['carrier-group'] ?? 0),
+      step: '10',
+      value: '200',
+    });
     return [
       el('h3', {}, ['Your ships']),
       el('div', { className: 'game-row' }, [
@@ -470,6 +490,25 @@ export function mountGamePanel(host: HTMLElement, options: GamePanelOptions): vo
               return;
             }
             act({ type: 'moveItem', by: me, item, to });
+          });
+        }),
+      ]),
+      el('div', { className: 'game-row' }, [
+        el('label', { htmlFor: 'move-bearing' }, ['Or steer it ']),
+        heading,
+        ' ',
+        el('label', { htmlFor: 'move-km' }, ['for ']),
+        distance,
+        ' km ',
+        button('Move it', 'move-steer', () => {
+          const item = itemsOf(getState()).find((t) => t.id === shipPick);
+          const km = Number(distance.value);
+          if (!item || !Number.isFinite(km) || km <= 0) return;
+          act({
+            type: 'moveItem',
+            by: me,
+            item: item.id,
+            to: destinationPoint(item.at, Number(heading.value), km),
           });
         }),
       ]),

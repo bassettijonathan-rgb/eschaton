@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   KM_PER_COURT_METRE,
   courtForLonLat,
+  destinationPoint,
   greatCircleKm,
   kmToCourtMetres,
   project,
@@ -47,5 +48,18 @@ describe('A6 projection', () => {
       5570,
       -2,
     );
+  });
+});
+
+describe('destinationPoint', () => {
+  it('goes the distance it is asked, on the bearing it is given', () => {
+    const from = { lon: -30, lat: 40 };
+    for (const bearing of [0, 45, 90, 180, 270]) {
+      const to = destinationPoint(from, bearing, 450);
+      expect(greatCircleKm(from, to)).toBeCloseTo(450, 6);
+    }
+    expect(destinationPoint(from, 0, 450).lon).toBeCloseTo(-30, 9);
+    expect(destinationPoint(from, 0, 450).lat).toBeGreaterThan(40);
+    expect(destinationPoint({ lon: 179, lat: 0 }, 90, 500).lon).toBeLessThan(-170);
   });
 });

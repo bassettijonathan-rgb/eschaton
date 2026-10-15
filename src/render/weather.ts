@@ -72,6 +72,11 @@ export class CourtWeather {
     m.opacity = fall.opacity;
   }
 
+  /** Whether anything is falling, so the courts need drawing every frame. */
+  active(): boolean {
+    return this.kind !== 'none';
+  }
+
   update(now: number): void {
     const dt = Math.min(0.1, now - this.last);
     this.last = now;
