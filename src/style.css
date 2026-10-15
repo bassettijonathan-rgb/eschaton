@@ -1,0 +1,57 @@
+:root {
+  color-scheme: light;
+  --ink: #1d2326;
+  --paper: #f4f1e8;
+  --eta-red: #a3202b;
+  --eta-gray: #6b7175;
+  font-family: Georgia, 'Times New Roman', serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #c9d3d8;
+  color: var(--ink);
+}
+
+#theater {
+  position: fixed;
+  inset: 0;
+}
+
+#theater canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+.masthead {
+  position: fixed;
+  top: 12px;
+  left: 16px;
+  right: 16px;
+  max-width: 34rem;
+  padding: 10px 14px;
+  background: rgba(244, 241, 232, 0.92);
+  border-left: 4px solid var(--eta-red);
+  pointer-events: none;
+}
+
+.masthead h1 {
+  margin: 0;
+  font-size: 1.4rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.masthead p {
+  margin: 4px 0 0;
+  font-size: 0.9rem;
+  color: var(--eta-gray);
+}
