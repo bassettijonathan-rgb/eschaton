@@ -5,7 +5,10 @@ import { GAME_MASTER, fillBuckets } from '../engine/buckets';
 import { COMBATANTS } from '../engine/data/combatants';
 import { TARGETS } from '../engine/data/targets';
 import { DEFAULT_WORLD_SITUATION } from '../engine/data/worldSituation';
-import { describeApparatus, describeTarget } from './describe';
+import { adjudicateImpact } from '../engine/lob';
+import { project } from '../engine/projection';
+import { describeApparatus, describeDetonation, describeTarget } from './describe';
+import { METER_PERIOD, describeTiming, meterPosition } from './lobPanel';
 
 const supply = fillBuckets(allocate(DEFAULT_WORLD_SITUATION, COMBATANTS));
 const layout = layoutApparatus(DEFAULT_WORLD_SITUATION, COMBATANTS);
@@ -49,5 +52,37 @@ describe('the inspector', () => {
     const cart = layout.find((a) => a.kind === 'cart');
     if (!cart) throw new Error('no cart');
     expect(describeApparatus(cart, GAME_MASTER, supply).lines.join(' ')).toMatch(/not the map/);
+  });
+});
+
+describe('what a warhead did', () => {
+  const at = (name: string) => project(find(name).at);
+
+  it('names a direct hit and the court it came down on', () => {
+    const line = describeDetonation(adjudicateImpact(at('Moscow'), 1));
+    expect(line).toMatch(/^Warhead 1 on Court \d: direct hit on Moscow/);
+  });
+
+  it('says where a miss landed and the nearest target', () => {
+    const p = at('Moscow');
+    const line = describeDetonation(adjudicateImpact({ x: p.x + 0.5, y: p.y }, 2));
+    expect(line).toMatch(
+      /^Warhead 2 on Court \d: landed in .+, \d+ km from .+, with nothing in reach\.$/,
+    );
+  });
+
+  it('says a warhead off the theater does nothing', () => {
+    expect(describeDetonation(adjudicateImpact({ x: 0, y: 40 }, 3))).toBe(
+      'Warhead 3 came down off the map, where it does nothing.',
+    );
+  });
+
+  it('reads a timing meter', () => {
+    expect(meterPosition(0)).toBeCloseTo(-1);
+    expect(meterPosition(METER_PERIOD / 4)).toBeCloseTo(0);
+    expect(meterPosition(METER_PERIOD / 2)).toBeCloseTo(1);
+    expect(describeTiming(0.01)).toBe('Timing: sweet spot.');
+    expect(describeTiming(-0.25)).toBe('Timing: 25% early.');
+    expect(describeTiming(0.6)).toBe('Timing: 60% late.');
   });
 });

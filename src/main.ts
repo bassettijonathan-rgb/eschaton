@@ -6,6 +6,7 @@ import { TARGETS } from './engine/data/targets';
 import { COURTS } from './engine/theater';
 import { COMBATANT_IDS, type CombatantId } from './engine/types';
 import { buildApparatus, buildPavilion } from './render/apparatus';
+import { AimPreview, FlightPlayer } from './render/flight';
 import { buildGarments, type PickTag } from './render/garments';
 import { buildMapMesh } from './render/mapTexture';
 import { buildTheaterScene } from './render/theaterScene';
@@ -13,6 +14,7 @@ import { mountAllocationPanel } from './ui/allocationPanel';
 import { describeApparatus, describeTarget } from './ui/describe';
 import { mountInspector } from './ui/inspector';
 import { mountLegendPanel } from './ui/legendPanel';
+import { mountLobPanel } from './ui/lobPanel';
 import { getState } from './ui/store';
 import { getViewer, setViewer } from './ui/viewer';
 import './style.css';
@@ -69,6 +71,11 @@ function start(container: HTMLElement): void {
   const pavilion = buildPavilion();
   scene.add(pavilion);
 
+  const flights = new FlightPlayer();
+  scene.add(flights.group);
+  const aimPreview = new AimPreview();
+  scene.add(aimPreview.group);
+
   const camera = new THREE.PerspectiveCamera(40, 1, 0.05, 600);
   camera.position.set(0, 70, 55);
   const controls = new OrbitControls(camera, renderer.domElement);
@@ -100,6 +107,24 @@ function start(container: HTMLElement): void {
   marker.visible = false;
   marker.renderOrder = 10;
   scene.add(marker);
+  const lobPanel = mountLobPanel(document.body, {
+    onAimingChange(on) {
+      renderer.domElement.style.cursor = on ? 'crosshair' : '';
+    },
+    onPreview(from, to) {
+      aimPreview.show(from, to);
+    },
+    onLaunch(result) {
+      document.body.dataset['flying'] = 'true';
+      flights.play(result, performance.now() / 1000, undefined, () => {
+        lobPanel.showResult(result);
+        document.body.dataset['flying'] = 'false';
+        document.body.dataset['lobs'] = String(getState().lobs.length);
+      });
+    },
+    isFlying: () => flights.busy(),
+  });
+  const courtPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   let down: { x: number; y: number } | null = null;
   let selected: PickTag | undefined;
 
@@ -130,6 +155,11 @@ function start(container: HTMLElement): void {
       -((e.clientY - rect.top) / rect.height) * 2 + 1,
     );
     raycaster.setFromCamera(ndc, camera);
+    if (lobPanel.aiming()) {
+      const p = raycaster.ray.intersectPlane(courtPlane, new THREE.Vector3());
+      if (p) lobPanel.setAim({ x: p.x, y: -p.z });
+      return;
+    }
     const hit = raycaster.intersectObjects([garments, apparatus, pavilion], true)[0];
     selected = hit ? findPickTag(hit.object) : undefined;
     if (!selected || !hit) {
@@ -187,6 +217,7 @@ function start(container: HTMLElement): void {
 
   renderer.setAnimationLoop(() => {
     controls.update();
+    flights.update(performance.now() / 1000);
     renderer.render(scene, camera);
   });
 
