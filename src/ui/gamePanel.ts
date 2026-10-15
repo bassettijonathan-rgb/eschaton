@@ -28,6 +28,18 @@ import {
 import { platformsFor } from '../engine/lob';
 import type { CombatantId, LonLat, Precipitation } from '../engine/types';
 import { el } from './dom';
+import {
+  computerPlaysAll,
+  getControllers,
+  getSkill,
+  isComputer,
+  isFast,
+  onComputersChange,
+  setComputer,
+  setComputerGameMaster,
+  setFast,
+  setSkill,
+} from './computers';
 import { dispatch, getState, onStateChange } from './store';
 import { getViewer, onViewerChange } from './viewer';
 
@@ -172,13 +184,15 @@ export function mountGamePanel(host: HTMLElement, options: GamePanelOptions): vo
       ? ` (${p.parties.map((id) => `${code(id)} puts up ${TARGETS.find((t) => t.id === p.cities?.[id])?.name ?? '?'}`).join('; ')})`
       : '';
     const waiting = p.parties.filter((id) => !p.acceptedBy.includes(id));
-    const state = p.broken
-      ? `broken: ${p.broken}`
-      : p.active
-        ? 'agreed'
-        : `proposed by ${code(p.proposedBy)}, waiting for ${list(waiting)}`;
+    const state = p.declined
+      ? `declined by ${p.declined}`
+      : p.broken
+        ? `broken: ${p.broken}`
+        : p.active
+          ? 'agreed'
+          : `proposed by ${code(p.proposedBy)}, waiting for ${list(waiting)}`;
     const li = el('li', {}, [`${PACT_LABELS[p.kind]}: ${list(p.parties)}${cities}, ${state}.`]);
-    if (viewer && waiting.includes(viewer) && s.phase === 'summit')
+    if (viewer && waiting.includes(viewer) && s.phase === 'summit' && !p.declined)
       li.append(
         ' ',
         button('Accept', `accept-pact-${String(p.id)}`, () => {
@@ -447,6 +461,55 @@ export function mountGamePanel(host: HTMLElement, options: GamePanelOptions): vo
     ];
   };
 
+  const computers = (s: GameState): HTMLElement[] => {
+    const boxes = s.situation.combatants.map((id) => {
+      const box = el('input', { type: 'checkbox', id: `cpu-${id}`, checked: isComputer(id) });
+      box.addEventListener('change', () => {
+        setComputer(id, box.checked);
+      });
+      return el('label', { htmlFor: `cpu-${id}` }, [box, ` ${code(id)}`]);
+    });
+    const skill = el('input', {
+      type: 'range',
+      id: 'cpu-skill',
+      min: '0',
+      max: '100',
+      value: String(Math.round(getSkill() * 100)),
+    });
+    skill.addEventListener('change', () => {
+      setSkill(Number(skill.value) / 100);
+    });
+    const gm = el('input', {
+      type: 'checkbox',
+      id: 'cpu-gm',
+      checked: getControllers().gameMaster,
+    });
+    gm.addEventListener('change', () => {
+      setComputerGameMaster(gm.checked);
+    });
+    const fast = el('input', { type: 'checkbox', id: 'cpu-fast', checked: isFast() });
+    fast.addEventListener('change', () => {
+      setFast(fast.checked);
+    });
+    return [
+      el('h3', {}, ['Computer players']),
+      el('div', { className: 'game-row' }, boxes),
+      el('div', { className: 'game-row' }, [
+        el('label', { htmlFor: 'cpu-skill' }, ['Launchman skill ']),
+        skill,
+        ` ${String(Math.round(getSkill() * 100))}%`,
+      ]),
+      el('label', { htmlFor: 'cpu-gm', className: 'game-row' }, [
+        gm,
+        ' The computer runs the table: drafts, TRIGSIT, the clock',
+      ]),
+      el('label', { htmlFor: 'cpu-fast', className: 'game-row' }, [fast, ' Fast flights']),
+      button('Watch the computers play a whole game', 'cpu-all', () => {
+        computerPlaysAll(s.situation.combatants);
+      }),
+    ];
+  };
+
   const humanGodToggle = (s: GameState): HTMLElement => {
     const box = el('input', { type: 'checkbox', id: 'human-god', checked: s.humanGod });
     box.addEventListener('change', () => {
@@ -704,7 +767,7 @@ export function mountGamePanel(host: HTMLElement, options: GamePanelOptions): vo
         break;
     }
     if (isGm && s.phase !== 'ended') {
-      parts.push(courtWeather(s), humanGodToggle(s));
+      parts.push(courtWeather(s), humanGodToggle(s), ...computers(s));
       if (s.phase !== 'play')
         parts.push(
           button('Practice: skip to play', 'skip-to-play', () => {
@@ -719,6 +782,9 @@ export function mountGamePanel(host: HTMLElement, options: GamePanelOptions): vo
   }
 
   onStateChange(() => {
+    render();
+  });
+  onComputersChange(() => {
     render();
   });
   onViewerChange(() => {

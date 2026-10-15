@@ -36,6 +36,14 @@ but never reaches EndStat, however hard a Combatant appeals. Only submarines and
 carrier groups ever move, at sea and within their range, and anything else stays
 where the map puts it.
 
+Any Combatant, and the game-master, can be handed to the computer. Computer
+Combatants endorse or reject the World Situation, bluff at the summit, accept or
+decline pacts and break them according to their head of state's profile, pick
+targets with the Decision Tree and swing with a skill setting; "Watch the
+computers play a whole game" runs one from the World Situation to EndStat's
+winner. The Yushityu shows the Decision Tree's suggestion, and "Appeal to
+Pemulis" shows the full audit trail of any calculation.
+
 ## Running it
 
 You need Node 22 or later.
@@ -66,14 +74,14 @@ CI (`.github/workflows/ci.yml`) runs all of these on every pull request.
 
 ## Layout
 
-| Path          | What lives there                                                                                                                         |
-| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/engine/` | The rules core: pure, deterministic and seeded. No DOM, no Three.js, no `Math.random`, no wall clock (lint enforces this). Unit-tested.  |
-| `src/render/` | Three.js scene building: courts, the map, garments, players, and lobs in flight.                                                         |
-| `src/ui/`     | Page panels: the game-master's clipboard, the hand-off screen, the allocation table, the legend, the inspector, the racquet and EndStat. |
-| `src/main.ts` | Page entry point.                                                                                                                        |
-| `e2e/`        | Playwright browser tests.                                                                                                                |
-| `docs/`       | `FIDELITY.md`: every reading of the novel the game makes, and why.                                                                       |
+| Path          | What lives there                                                                                                                                                         |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `src/engine/` | The rules core: pure, deterministic and seeded. No DOM, no Three.js, no `Math.random`, no wall clock (lint enforces this). Unit-tested.                                  |
+| `src/render/` | Three.js scene building: courts, the map, garments, players, and lobs in flight.                                                                                         |
+| `src/ui/`     | Page panels: the game-master's clipboard, the hand-off screen, the allocation table, the legend, the inspector, the racquet, EndStat and the computer players' switches. |
+| `src/main.ts` | Page entry point.                                                                                                                                                        |
+| `e2e/`        | Playwright browser tests.                                                                                                                                                |
+| `docs/`       | `FIDELITY.md`: every reading of the novel the game makes, and why.                                                                                                       |
 
 ## Source
 
