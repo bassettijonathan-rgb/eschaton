@@ -9,8 +9,9 @@ launched only by racquet. Shirts, towels, shorts, armbands, socks and sneakers
 laid on the courts are cities, airfields, command sites and submarines. The
 game-master wears the beanie and runs EndStat, and the map is not the territory.
 
-This repository is being built milestone by milestone (M0 through M9). So far the
-page draws the four courts with the world on them, every target garment, the
+**Play it at <https://bassettijonathan-rgb.github.io/eschaton/>.**
+
+The page draws the four courts with the world on them, every target garment, the
 players, their buckets and Lord's cart; clicking a garment names what it is on
 the map, and the game-master's allocation table shows each Combatant's warheads.
 Viewing as a Combatant, you can take the racquet: pick a launch platform, aim on
@@ -53,6 +54,15 @@ IRLIBSYR on the way. The first snow of the year falls mid-afternoon and changes
 nothing. Pemulis wins the argument, so a ball that hits a player scores nothing
 and the game runs on to the 1600h siren.
 
+The **Rulebook** button opens the rules, in the spirit of Hal's: six sections,
+appendices on the garments and the Combatants, sample Decision Trees worked out
+live by the game's own, and a short essay on the game theory. A five-card
+**Introduction** greets a first visit. Everything but the swing works from the
+keyboard ("Find on the courts" inspects any garment, the arrow keys move the view,
+and submarines are steered by compass bearing), and the latest log line is read
+out to screen readers. A lob pops off the racquet and the siren winds up at 1600h;
+**Sound** turns both off. An idle page stops drawing, so it is light on a laptop.
+
 ## Running it
 
 You need Node 22 or later.
@@ -62,7 +72,8 @@ npm install
 npm run dev          # http://localhost:5173
 ```
 
-Drag to tilt and turn the camera; scroll to zoom.
+Drag to tilt and turn the camera; scroll to zoom. With the courts focused, the
+arrow keys move the view.
 
 ## Checks
 
@@ -79,18 +90,21 @@ npm run check        # everything above except the browser test
 The first time you run the browser test, install its browser with
 `npx playwright install chromium`.
 
-CI (`.github/workflows/ci.yml`) runs all of these on every pull request.
+CI (`.github/workflows/ci.yml`) runs all of these on every pull request. Every push
+to `main` builds the site and deploys it to GitHub Pages
+(`.github/workflows/pages.yml`); the repository's Pages source must be set to
+"GitHub Actions".
 
 ## Layout
 
-| Path          | What lives there                                                                                                                                                         |
-| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `src/engine/` | The rules core: pure, deterministic and seeded. No DOM, no Three.js, no `Math.random`, no wall clock (lint enforces this). Unit-tested.                                  |
-| `src/render/` | Three.js scene building: courts, the map, garments, players, and lobs in flight.                                                                                         |
-| `src/ui/`     | Page panels: the game-master's clipboard, the hand-off screen, the allocation table, the legend, the inspector, the racquet, EndStat and the computer players' switches. |
-| `src/main.ts` | Page entry point.                                                                                                                                                        |
-| `e2e/`        | Playwright browser tests.                                                                                                                                                |
-| `docs/`       | `FIDELITY.md`: every reading of the novel the game makes, and why.                                                                                                       |
+| Path          | What lives there                                                                                                                                                                                                |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/engine/` | The rules core: pure, deterministic and seeded. No DOM, no Three.js, no `Math.random`, no wall clock (lint enforces this). Unit-tested.                                                                         |
+| `src/render/` | Three.js scene building: courts, the map, garments, players, and lobs in flight.                                                                                                                                |
+| `src/ui/`     | Page panels: the game-master's clipboard, the hand-off screen, the allocation table, the legend, the inspector, the racquet, EndStat, the computer players' switches, the rulebook, the introduction and sound. |
+| `src/main.ts` | Page entry point.                                                                                                                                                                                               |
+| `e2e/`        | Playwright browser tests.                                                                                                                                                                                       |
+| `docs/`       | `FIDELITY.md`: every reading of the novel the game makes, and why.                                                                                                                                              |
 
 ## Source
 

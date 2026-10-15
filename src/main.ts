@@ -6,7 +6,7 @@ import { TARGETS } from './engine/data/targets';
 import type { Viewer } from './engine/buckets';
 import { nextComputerAction } from './engine/ai';
 import { codeOf } from './engine/scenario';
-import { itemsOf, type Action } from './engine/game';
+import { canRead, itemsOf, type Action } from './engine/game';
 import { platformsFor, solveSpeed, type LobResult } from './engine/lob';
 import { project, unproject } from './engine/projection';
 import { COURTS } from './engine/theater';
@@ -19,7 +19,7 @@ import { buildMapMesh } from './render/mapTexture';
 import { buildTheaterScene, toWorld } from './render/theaterScene';
 import { CourtWeather } from './render/weather';
 import { mountAllocationPanel } from './ui/allocationPanel';
-import { describeApparatus, describeDamage, describeTarget } from './ui/describe';
+import { describeApparatus, describeDamage, describeTarget, ownerName } from './ui/describe';
 import { mountInspector } from './ui/inspector';
 import { mountLegendPanel } from './ui/legendPanel';
 import { mountLobPanel, type LobPanelHooks } from './ui/lobPanel';
@@ -29,6 +29,9 @@ import { mountGamePanel } from './ui/gamePanel';
 import { mountHandOff } from './ui/handoff';
 import { getViewer, setViewer } from './ui/viewer';
 import { mountYushityu } from './ui/yushityu';
+import { mountOnboarding } from './ui/onboarding';
+import { mountRulebook } from './ui/rulebook';
+import { onSoundChange, play, setSound, soundOn } from './ui/sound';
 import './style.css';
 
 declare global {
@@ -45,6 +48,8 @@ declare global {
       ): string[];
       /** Apply a game action directly, as the panels do: for tests. */
       dispatch(action: Action): string[];
+      /** How many frames have been drawn: the courts are drawn only when something changes. */
+      frames(): number;
     };
   }
 }
@@ -86,6 +91,8 @@ function start(container: HTMLElement): void {
     'East Courts 6 through 9 seen from above, with the world drawn on them and the target garments laid out',
   );
   renderer.domElement.setAttribute('role', 'img');
+  // With the courts focused, the arrow keys move the view.
+  renderer.domElement.tabIndex = 0;
 
   const { scene, courts } = buildTheaterScene();
   scene.add(buildMapMesh());
@@ -116,6 +123,8 @@ function start(container: HTMLElement): void {
   controls.maxDistance = 200;
   controls.minPolarAngle = 0;
   controls.maxPolarAngle = Math.PI * 0.45;
+  controls.listenToKeyEvents(renderer.domElement);
+  controls.keyPanSpeed = 20;
 
   const resize = (): void => {
     const { clientWidth: w, clientHeight: h } = container;
@@ -158,6 +167,7 @@ function start(container: HTMLElement): void {
       return;
     }
     document.body.dataset['flying'] = 'true';
+    play('pop');
     flights.play(result, performance.now() / 1000, undefined, () => {
       lobPanel.showResult(result);
       plumes.update(getState().endstat);
@@ -189,7 +199,14 @@ function start(container: HTMLElement): void {
       obj?.position.copy(toWorld(x, y, 0.003));
     }
   };
+  let wasOver = getState().phase === 'ended';
+  const announcer = document.getElementById('announcer');
   onStateChange((s) => {
+    if (s.phase === 'ended' && !wasOver && s.ended?.reason === 'clock') play('siren');
+    wasOver = s.phase === 'ended';
+    const latest = s.log.filter((e) => canRead(e.audience, getViewer())).at(-1);
+    if (announcer && latest && announcer.textContent !== latest.text)
+      announcer.textContent = latest.text;
     showBeanie();
     showWeather();
     placeShips();
@@ -242,6 +259,47 @@ function start(container: HTMLElement): void {
         });
     }
   };
+
+  // The keyboard way to inspect: choose a garment or a player by name.
+  const finder = document.getElementById('finder') as HTMLSelectElement | null;
+  if (finder) {
+    const byOwner = new Map<string, HTMLOptGroupElement>();
+    for (const item of TARGETS) {
+      const label = ownerName(item.owner);
+      let group = byOwner.get(label);
+      if (!group) {
+        group = document.createElement('optgroup');
+        group.label = label;
+        byOwner.set(label, group);
+      }
+      group.append(new Option(item.name, `target:${item.id}`));
+    }
+    const people = document.createElement('optgroup');
+    people.label = 'On the courts but not on the map';
+    for (const a of layout) people.append(new Option(a.label, `apparatus:${a.id}`));
+    finder.append(...byOwner.values(), people);
+    finder.addEventListener('change', () => {
+      const [kind, id] = finder.value.split(':');
+      if ((kind !== 'target' && kind !== 'apparatus') || !id) return;
+      let found: THREE.Object3D | undefined;
+      for (const root of [garments, apparatus])
+        root.traverse((o) => {
+          const tagged = o.userData['pick'] as PickTag | undefined;
+          if (!found && tagged?.kind === kind && tagged.id === id) found = o;
+        });
+      selected = { kind, id };
+      if (found) {
+        const at = found.getWorldPosition(new THREE.Vector3());
+        marker.position.set(at.x, 0.01, at.z);
+        marker.visible = true;
+        // Bring it to the middle of the view.
+        const shift = new THREE.Vector3(at.x - controls.target.x, 0, at.z - controls.target.z);
+        controls.target.add(shift);
+        camera.position.add(shift);
+      }
+      showSelected();
+    });
+  }
 
   renderer.domElement.addEventListener('pointerdown', (e) => {
     down = { x: e.clientX, y: e.clientY };
@@ -324,6 +382,7 @@ function start(container: HTMLElement): void {
   }
 
   window.eschaton = {
+    frames: () => frames,
     dispatch(action) {
       const o = dispatch(action);
       return o.ok ? [] : [...o.problems];
@@ -384,11 +443,29 @@ function start(container: HTMLElement): void {
   onComputersChange(pace);
   pace();
 
+  // Draw only when something has changed: the camera, a ball in flight,
+  // weather falling, or anything the person at the screen did. An idle
+  // page costs nothing, which is what keeps a mid-range laptop cool.
+  let dirty = 2;
+  let frames = 0;
+  const wake = (): void => {
+    dirty = Math.max(dirty, 2);
+  };
+  for (const type of ['pointerdown', 'pointermove', 'wheel', 'keydown', 'input', 'change', 'click'])
+    window.addEventListener(type, wake, { passive: true });
+  window.addEventListener('resize', wake);
+  onStateChange(wake);
   renderer.setAnimationLoop(() => {
-    controls.update();
-    flights.update(performance.now() / 1000);
-    weather.update(performance.now() / 1000);
+    const now = performance.now() / 1000;
+    const moved = controls.update();
+    const flying = flights.busy();
+    if (flying) flights.update(now);
+    const falling = weather.active();
+    if (falling) weather.update(now);
+    if (!moved && !flying && !falling && dirty === 0) return;
+    if (dirty > 0) dirty--;
     renderer.render(scene, camera);
+    frames++;
   });
 
   document.body.dataset['courts'] = String(courts.length);
@@ -406,3 +483,26 @@ mountAllocationPanel(document.body);
 const yushityu = mountYushityu(document.body);
 mountGamePanel(document.body, { crunch: yushityu.crunch, pickPoint: () => pickPoint() });
 mountLegendPanel(document.body);
+
+// The masthead's toolbar: the rulebook, the introduction and sound.
+const rulebook = mountRulebook(document.body);
+const intro = mountOnboarding(document.body, () => {
+  rulebook.open();
+});
+document.getElementById('open-rulebook')?.addEventListener('click', () => {
+  rulebook.open();
+});
+document.getElementById('open-intro')?.addEventListener('click', () => {
+  intro.open();
+});
+const soundButton = document.getElementById('sound-toggle');
+const showSound = (on: boolean): void => {
+  if (!soundButton) return;
+  soundButton.setAttribute('aria-pressed', String(on));
+  soundButton.textContent = on ? 'Sound on' : 'Sound off';
+};
+showSound(soundOn());
+onSoundChange(showSound);
+soundButton?.addEventListener('click', () => {
+  setSound(!soundOn());
+});

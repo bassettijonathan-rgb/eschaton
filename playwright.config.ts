@@ -11,6 +11,11 @@ export default defineConfig({
   use: {
     baseURL,
     trace: 'retain-on-failure',
+    // Tests play as returning visitors, so the introduction does not cover the courts.
+    storageState: {
+      cookies: [],
+      origins: [{ origin: baseURL, localStorage: [{ name: 'eschaton-intro-seen', value: 'yes' }] }],
+    },
   },
   projects: [
     {

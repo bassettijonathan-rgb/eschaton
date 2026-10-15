@@ -14,14 +14,26 @@
     <header class="masthead">
       <h1>Eschaton</h1>
       <p>East Courts, Enfield Tennis Academy. <span id="court-list"></span></p>
-      <p>Click a garment to see what it is on the map. Drag to turn, scroll to zoom.</p>
+      <p>Click a garment to see what it is. Drag to turn, scroll to zoom, or use the arrow keys.</p>
       <label class="viewer-pick"
         >Viewing as
         <select id="viewer">
           <option value="gm">Game-master</option>
         </select>
       </label>
+      <div class="toolbar">
+        <label class="finder"
+          >Find on the courts
+          <select id="finder">
+            <option value="">Choose a garment or player</option>
+          </select>
+        </label>
+        <button type="button" id="open-rulebook">Rulebook</button>
+        <button type="button" id="open-intro">Introduction</button>
+        <button type="button" id="sound-toggle" aria-pressed="true">Sound on</button>
+      </div>
     </header>
+    <p id="announcer" class="sr-only" aria-live="polite"></p>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

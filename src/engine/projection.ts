@@ -57,6 +57,25 @@ export function greatCircleKm(a: LonLat, b: LonLat): number {
   return 2 * r * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
+/** Where you end up going `km` from `from` on an initial compass bearing (degrees clockwise from north). */
+export function destinationPoint(from: LonLat, bearingDeg: number, km: number): LonLat {
+  const r = EARTH_CIRCUMFERENCE_KM / (2 * Math.PI);
+  const rad = Math.PI / 180;
+  const d = km / r;
+  const b = bearingDeg * rad;
+  const lat1 = from.lat * rad;
+  const lon1 = from.lon * rad;
+  const lat2 = Math.asin(Math.sin(lat1) * Math.cos(d) + Math.cos(lat1) * Math.sin(d) * Math.cos(b));
+  const lon2 =
+    lon1 +
+    Math.atan2(
+      Math.sin(b) * Math.sin(d) * Math.cos(lat1),
+      Math.cos(d) - Math.sin(lat1) * Math.sin(lat2),
+    );
+  const lon = ((((lon2 / rad + 540) % 360) + 360) % 360) - 180;
+  return { lon, lat: lat2 / rad };
+}
+
 // The theater is exactly 2:1, so one degree is the same length both ways.
 if (Math.abs(THEATER_LENGTH / 180 - METRES_PER_DEGREE) > 1e-9) {
   throw new Error('theater is not 2:1');
