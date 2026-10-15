@@ -7,6 +7,7 @@ import { COMBATANTS } from '../engine/data/combatants';
 import { pointValue } from '../engine/data/points';
 import { TARGETS, TARGET_TYPE_LABELS, garmentFor } from '../engine/data/targets';
 import { UNPLAYED_NATIONS } from '../engine/data/worldSituation';
+import type { EndStatReport, StrikeReport, Tally } from '../engine/endstat';
 import { HOWITZER_RANGE_KM, type Detonation, type LobResult } from '../engine/lob';
 import { greatCircleKm } from '../engine/projection';
 import { territoryAt } from '../engine/territory';
@@ -121,4 +122,55 @@ export function describeLob(r: LobResult): Description {
       `${String(r.outOfRange)} ${r.outOfRange === 1 ? 'shell' : 'shells'} fell beyond the howitzer's ${String(HOWITZER_RANGE_KM)} km and did nothing.`,
     );
   return { title: `${def.code} lobs ${what} from ${r.platform.name}`, lines };
+}
+
+const millions = (n: number): string =>
+  n >= 0.995 ? `${n.toFixed(1)} million` : `${Math.round(n * 1000).toLocaleString('en-US')},000`;
+
+/** One line for the strike log: what a warhead hit and what it cost. */
+export function describeStrike(s: StrikeReport): string {
+  const who = `${COMBATANTS[s.combatant].code}, warhead ${String(s.detonation.warhead)}`;
+  if (s.detonation.offMap) return `${who}: off the map, no effect.`;
+  const parts: string[] = [];
+  const hit = s.hits.map((h) => {
+    const notes = [
+      h.kind,
+      ...(h.firestorm ? ['firestorm'] : []),
+      ...(h.scoring === 'mistargeting' ? ['mistargeting'] : []),
+    ];
+    return `${h.item.name} (${notes.join(', ')})`;
+  });
+  parts.push(hit.length > 0 ? hit.join('; ') : 'nothing in reach');
+  const dead =
+    s.hits.reduce((n, h) => n + h.deaths, 0) + s.fallout.reduce((n, f) => n + f.deaths, 0);
+  if (dead > 0) parts.push(`${millions(dead)} dead`);
+  const downwind = s.fallout.filter((f) => !s.hits.some((h) => h.item.id === f.city.id));
+  if (downwind.length > 0) parts.push(`fallout on ${downwind.map((f) => f.city.name).join(', ')}`);
+  if (s.sacpop) parts.push('SACPOP');
+  return `${who}: ${parts.join('. ')}.`;
+}
+
+export function formatRatio(t: Pick<Tally, 'ratio'>): string {
+  if (t.ratio === undefined) return '—';
+  if (t.ratio === Infinity) return '∞';
+  return t.ratio.toFixed(3);
+}
+
+/** What EndStat says about a target once it has been struck or irradiated. */
+export function describeDamage(item: TargetItem, report: EndStatReport): string[] {
+  const lines: string[] = [];
+  const city = report.cities.find((c) => c.item.id === item.id);
+  if (city && (city.dead > 0 || city.injured > 0 || city.shortened > 0)) {
+    lines.push(
+      `EndStat: ${millions(city.dead)} dead, ${millions(city.injured)} injured, ${millions(city.shortened)} with shortened lives.`,
+    );
+    if (city.firestorm) lines.push('A firestorm has burned through it.');
+  }
+  const destroyed = report.strikes
+    .flatMap((s) => s.hits)
+    .filter((h) => h.item.id === item.id && h.item.type !== 'MAMA')
+    .reduce((n, h) => n + h.destruction, 0);
+  if (destroyed > 0) lines.push(`EndStat: ${(destroyed * 100).toFixed(0)}% destroyed.`);
+  if (report.destroyedPlatforms.includes(item.id)) lines.push('Can no longer launch.');
+  return lines;
 }

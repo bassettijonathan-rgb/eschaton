@@ -311,6 +311,144 @@ body {
   padding-left: 1.1em;
 }
 
+.yushityu-panel {
+  left: 270px;
+  width: min(30rem, calc(100vw - 290px));
+  border-left-color: #5fd38d;
+}
+
+.yushityu-screen {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: #101814;
+  color: #a8f0c0;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 0.75rem;
+}
+
+.yushityu-screen table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.yushityu-screen caption {
+  text-align: left;
+  color: #6fbf8a;
+  padding-bottom: 4px;
+}
+
+.yushityu-screen th,
+.yushityu-screen td {
+  padding: 2px 4px;
+  border-bottom: 1px solid rgba(168, 240, 192, 0.15);
+  text-align: left;
+}
+
+.yushityu-screen .num,
+.yushityu-crunch .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.yushityu-screen h3 {
+  margin: 10px 0 4px;
+  font-size: 0.8rem;
+  color: #5fd38d;
+}
+
+.yushityu-screen .panel-note {
+  color: #6fbf8a;
+}
+
+.strike-log {
+  margin: 0;
+  padding-left: 1.6em;
+}
+
+.strike-log li {
+  margin: 3px 0;
+}
+
+.strike-log pre,
+.crunch-lines {
+  white-space: pre-wrap;
+  margin: 4px 0;
+  font-size: 0.7rem;
+  color: #c8f5d6;
+}
+
+.crunch-controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.crunch-controls button,
+.yushityu-crunch button {
+  font: inherit;
+  padding: 3px 10px;
+  cursor: pointer;
+}
+
+.yushityu-crunch {
+  width: min(44rem, calc(100vw - 32px));
+  max-height: calc(100vh - 64px);
+  padding: 14px 16px;
+  border: 6px solid #2a2a2e;
+  background: #101814;
+  color: #a8f0c0;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+}
+
+.yushityu-crunch::backdrop {
+  background: rgba(10, 14, 12, 0.6);
+}
+
+.yushityu-crunch h2 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+  color: #5fd38d;
+}
+
+.yushityu-crunch .crunch-lines {
+  height: 40vh;
+  overflow: auto;
+}
+
+.crunch-progress {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin: 8px 0;
+}
+
+.crunch-progress progress {
+  flex: 1;
+}
+
+.crunch-verdict p {
+  font-size: 0.95rem;
+  color: #fff4a0;
+}
+
+.crunch-verdict th,
+.crunch-verdict td {
+  padding: 2px 4px;
+  text-align: left;
+}
+
+.crunch-verdict caption {
+  text-align: left;
+}
+
+.crunch-verdict table {
+  width: 100%;
+  margin-bottom: 10px;
+  border-collapse: collapse;
+}
+
 @media (max-width: 700px) {
   .inspector {
     top: auto;
@@ -318,6 +456,11 @@ body {
   }
   .legend-panel {
     bottom: 64px;
+  }
+  .yushityu-panel {
+    left: 16px;
+    bottom: 64px;
+    width: calc(100vw - 32px);
   }
   .lob-panel {
     bottom: 112px;

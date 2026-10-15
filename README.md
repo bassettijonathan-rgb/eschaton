@@ -16,7 +16,10 @@ the map, and the game-master's allocation table shows each Combatant's warheads.
 Viewing as a Combatant, you can take the racquet: pick a launch platform, aim on
 the map, set elevation, topspin and pace, and swing against the timing meter. The
 ball (or a MIRV jockstrap that opens at the top of its arc) flies with real
-tennis-ball physics and detonates where it first touches the court.
+tennis-ball physics and detonates where it first touches the court. EndStat, on the
+Yushityu, works out what each warhead did (blast, firestorms, fallout plumes, EMP),
+keeps the INDDIR and SUFDDIR tallies with their four corrections and SACPOP
+penalties, and confirms a winner by ratio, showing its working.
 
 ## Running it
 

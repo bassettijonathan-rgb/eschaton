@@ -22,7 +22,7 @@ test('the game-master can see the megatonnage allocation and change its method',
 }) => {
   await page.goto('/');
   await page.getByText('EndStat: megatonnage allocation').click();
-  const row = (code: string) => page.locator(`tr[data-combatant="${code}"]`);
+  const row = (code: string) => page.locator(`.allocation-table tr[data-combatant="${code}"]`);
   await expect(row('SOUTHAF').locator('td').first()).toHaveText('16');
   const amnatMt = Number(await row('AMNAT').locator('td').nth(1).textContent());
   expect(amnatMt).toBeGreaterThanOrEqual(380);
@@ -63,5 +63,5 @@ test("a Combatant cannot see another Combatant's bucket", async ({ page }) => {
   await expect(page.locator('#inspector')).toContainText(/Holds \d+ warheads/);
 
   await page.getByText('EndStat: megatonnage allocation').click();
-  await expect(page.locator('tr[data-combatant]')).toHaveCount(1);
+  await expect(page.locator('.allocation-table tr[data-combatant]')).toHaveCount(1);
 });

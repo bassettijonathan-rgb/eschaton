@@ -104,12 +104,15 @@ export function validateLaunch(
   ws: WorldSituation,
   defs: Readonly<Record<CombatantId, CombatantDef>>,
   warheadsInBucket: number,
+  destroyedPlatforms: readonly string[] = [],
 ): string[] {
   const problems: string[] = [];
   const def = defs[order.combatant];
   if (!ws.combatants.includes(order.combatant)) problems.push(`${def.code} is not playing`);
   const platform = platformsFor(order.combatant, ws).find((p) => p.id === order.platformId);
   if (!platform) problems.push(`${def.code} has no launch platform called ${order.platformId}`);
+  else if (destroyedPlatforms.includes(platform.id))
+    problems.push(`${platform.name} has been struck and can no longer launch`);
   if (!Number.isInteger(order.warheads) || order.warheads < 1)
     problems.push('a launch carries at least one warhead');
   if (order.warheads > def.mirvCap)
