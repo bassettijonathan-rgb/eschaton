@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { foldGamePanel, viewAs } from './helpers';
 
 test('the page loads and draws the four courts, the map and every garment', async ({ page }) => {
   const errors: string[] = [];
@@ -55,11 +56,12 @@ test('clicking a garment names what it is on the map', async ({ page }) => {
 
 test("a Combatant cannot see another Combatant's bucket", async ({ page }) => {
   await page.goto('/');
-  await page.getByLabel('Viewing as').selectOption('SOVWAR');
+  await foldGamePanel(page);
+  await viewAs(page, 'SOVWAR');
   await clickOn(page, 'amnat-bucket');
   await expect(page.locator('#inspector')).toContainText('cannot see how many warheads');
 
-  await page.getByLabel('Viewing as').selectOption('AMNAT');
+  await viewAs(page, 'AMNAT');
   await expect(page.locator('#inspector')).toContainText(/Holds \d+ warheads/);
 
   await page.getByText('EndStat: megatonnage allocation').click();

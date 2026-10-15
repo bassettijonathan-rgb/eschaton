@@ -62,7 +62,7 @@ export function mountAllocationPanel(host: HTMLElement): void {
   const tableHost = el('div', { className: 'allocation-table' });
   const update = (): void => {
     tableHost.replaceChildren(renderTable(getState().allocation, getViewer()));
-    select.disabled = getViewer().kind !== 'gameMaster';
+    select.disabled = getViewer().kind !== 'gameMaster' || getState().phase !== 'worldSituation';
   };
   select.addEventListener('change', () => {
     setMethod(select.value as AllocationMethod);
@@ -75,7 +75,7 @@ export function mountAllocationPanel(host: HTMLElement): void {
     el('details', { className: 'panel allocation-panel', id: 'allocation-panel' }, [
       el('summary', {}, ['EndStat: megatonnage allocation']),
       el('p', { className: 'panel-note' }, [
-        'Only the game-master can change the method. Each Combatant sees only its own bucket.',
+        'Only the game-master can change the method, and only before the World Situation is endorsed. Each Combatant sees only its own bucket.',
       ]),
       el('label', { htmlFor: 'allocation-method' }, ['Method ']),
       select,

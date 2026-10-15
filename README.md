@@ -21,6 +21,15 @@ Yushityu, works out what each warhead did (blast, firestorms, fallout plumes, EM
 keeps the INDDIR and SUFDDIR tallies with their four corrections and SACPOP
 penalties, and confirms a winner by ratio, showing its working.
 
+The game-master's clipboard runs a whole game: a quorum endorses the World
+Situation and agrees a TRIGSIT, the summit records alliances, humane-war pacts,
+hotlines, DEFCON gradients and city trades, and in play the game-master validates
+every order against DEFCON, pacts and cessations, ferries hotline messages (EMP
+shortens them), changes beanies (white for a cessation, red for Utter Global
+Crisis, black for nothing at all) and runs the clock to the siren. Switch who is
+viewing and a hand-off screen hides the last player's secrets. Human God mode
+lets a person make the rulings instead.
+
 ## Running it
 
 You need Node 22 or later.
@@ -51,14 +60,14 @@ CI (`.github/workflows/ci.yml`) runs all of these on every pull request.
 
 ## Layout
 
-| Path          | What lives there                                                                                                                        |
-| ------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/engine/` | The rules core: pure, deterministic and seeded. No DOM, no Three.js, no `Math.random`, no wall clock (lint enforces this). Unit-tested. |
-| `src/render/` | Three.js scene building: courts, the map, garments, players, and lobs in flight.                                                        |
-| `src/ui/`     | Page panels: the allocation table, the legend, the inspector and the racquet.                                                           |
-| `src/main.ts` | Page entry point.                                                                                                                       |
-| `e2e/`        | Playwright browser tests.                                                                                                               |
-| `docs/`       | `FIDELITY.md`: every reading of the novel the game makes, and why.                                                                      |
+| Path          | What lives there                                                                                                                         |
+| ------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/engine/` | The rules core: pure, deterministic and seeded. No DOM, no Three.js, no `Math.random`, no wall clock (lint enforces this). Unit-tested.  |
+| `src/render/` | Three.js scene building: courts, the map, garments, players, and lobs in flight.                                                         |
+| `src/ui/`     | Page panels: the game-master's clipboard, the hand-off screen, the allocation table, the legend, the inspector, the racquet and EndStat. |
+| `src/main.ts` | Page entry point.                                                                                                                        |
+| `e2e/`        | Playwright browser tests.                                                                                                                |
+| `docs/`       | `FIDELITY.md`: every reading of the novel the game makes, and why.                                                                       |
 
 ## Source
 

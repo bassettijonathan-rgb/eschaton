@@ -3,11 +3,13 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { layoutApparatus } from './engine/apparatus';
 import { COMBATANTS } from './engine/data/combatants';
 import { TARGETS } from './engine/data/targets';
-import { platformsFor, solveSpeed } from './engine/lob';
+import type { Viewer } from './engine/buckets';
+import type { Action } from './engine/game';
+import { platformsFor, solveSpeed, type LobResult } from './engine/lob';
 import { project } from './engine/projection';
 import { COURTS } from './engine/theater';
 import { COMBATANT_IDS, type CombatantId } from './engine/types';
-import { buildApparatus, buildPavilion } from './render/apparatus';
+import { BEANIE_COLOURS, buildApparatus, buildPavilion } from './render/apparatus';
 import { AimPreview, FlightPlayer } from './render/flight';
 import { PlumeLayer } from './render/plumes';
 import { buildGarments, type PickTag } from './render/garments';
@@ -18,7 +20,9 @@ import { describeApparatus, describeDamage, describeTarget } from './ui/describe
 import { mountInspector } from './ui/inspector';
 import { mountLegendPanel } from './ui/legendPanel';
 import { mountLobPanel, type LobPanelHooks } from './ui/lobPanel';
-import { getState, launch, onStateChange } from './ui/store';
+import { dispatch, getState, launch, onStateChange } from './ui/store';
+import { mountGamePanel } from './ui/gamePanel';
+import { mountHandOff } from './ui/handoff';
 import { getViewer, setViewer } from './ui/viewer';
 import { mountYushityu } from './ui/yushityu';
 import './style.css';
@@ -35,6 +39,8 @@ declare global {
         target: string,
         warheads?: number,
       ): string[];
+      /** Apply a game action directly, as the panels do: for tests. */
+      dispatch(action: Action): string[];
     };
   }
 }
@@ -129,24 +135,50 @@ function start(container: HTMLElement): void {
     onPreview(from, to) {
       aimPreview.show(from, to);
     },
-    onLaunch(result) {
-      document.body.dataset['flying'] = 'true';
-      flights.play(result, performance.now() / 1000, undefined, () => {
-        lobPanel.showResult(result);
-        plumes.update(getState().endstat);
-        showSelected();
-        document.body.dataset['flying'] = 'false';
-        document.body.dataset['lobs'] = String(getState().lobs.length);
-      });
-    },
     isFlying: () => flights.busy(),
   };
   const lobPanel = mountLobPanel(document.body, lobHooks);
+
+  // Play each new lob as it is flown, one after another.
+  let played = 0;
+  const queue: LobResult[] = [];
+  const playNext = (): void => {
+    const result = queue.shift();
+    if (!result) {
+      document.body.dataset['flying'] = 'false';
+      return;
+    }
+    document.body.dataset['flying'] = 'true';
+    flights.play(result, performance.now() / 1000, undefined, () => {
+      lobPanel.showResult(result);
+      plumes.update(getState().endstat);
+      showSelected();
+      document.body.dataset['lobs'] = String(getState().lobs.length);
+      playNext();
+    });
+  };
+  // The game-master's beanie wears the game's state.
+  const beanie = scene.getObjectByName('beanie');
+  const showBeanie = (): void => {
+    if (beanie instanceof THREE.Mesh && beanie.material instanceof THREE.MeshLambertMaterial)
+      beanie.material.color.setHex(BEANIE_COLOURS[getState().beanie]);
+    document.body.dataset['beanie'] = getState().beanie;
+  };
+  showBeanie();
   onStateChange((s) => {
-    if (s.lobs.length > 0) return;
-    // A new allocation starts the game over.
-    flights.reset();
-    plumes.update(s.endstat);
+    showBeanie();
+    if (s.lobs.length < played) {
+      // A new game: clear the courts.
+      played = 0;
+      queue.length = 0;
+      flights.reset();
+      plumes.update(s.endstat);
+    }
+    if (s.lobs.length > played) {
+      queue.push(...s.lobs.slice(played));
+      played = s.lobs.length;
+      if (!flights.busy()) playNext();
+    }
   });
   const courtPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   let down: { x: number; y: number } | null = null;
@@ -219,14 +251,31 @@ function start(container: HTMLElement): void {
         return o;
       }),
     );
+    const handOff = mountHandOff(document.body);
+    const current = (): string => {
+      const v = getViewer();
+      return v.kind === 'gameMaster' ? 'gm' : v.id;
+    };
     viewSelect.addEventListener('change', () => {
       const v = viewSelect.value;
-      setViewer(v === 'gm' ? { kind: 'gameMaster' } : { kind: 'combatant', id: v as CombatantId });
-      showSelected();
+      const next: Viewer =
+        v === 'gm' ? { kind: 'gameMaster' } : { kind: 'combatant', id: v as CombatantId };
+      void handOff.ask(next).then((ok) => {
+        if (!ok) {
+          viewSelect.value = current();
+          return;
+        }
+        setViewer(next);
+        showSelected();
+      });
     });
   }
 
   window.eschaton = {
+    dispatch(action) {
+      const o = dispatch(action);
+      return o.ok ? [] : [...o.problems];
+    },
     perfectLob(combatant, platformName, targetName, warheads = 1) {
       const platform = platformsFor(combatant, getState().situation).find(
         (p) => p.name === platformName,
@@ -250,9 +299,7 @@ function start(container: HTMLElement): void {
         swing: { bearing: aim.bearing, elevation, speed: aim.speed, topspinRpm, timing: 0 },
         aimAt: target.at,
       });
-      if (!outcome.ok) return [...outcome.problems];
-      lobHooks.onLaunch(outcome.result);
-      return [];
+      return outcome.ok ? [] : [...outcome.problems];
     },
     screenPosition(name) {
       const obj = scene.getObjectByName(name);
@@ -287,5 +334,6 @@ start(container);
 const legend = document.getElementById('court-list');
 if (legend) legend.textContent = COURTS.map((c) => `Court ${String(c.number)}`).join(' · ');
 mountAllocationPanel(document.body);
-mountYushityu(document.body);
+const yushityu = mountYushityu(document.body);
+mountGamePanel(document.body, { crunch: yushityu.crunch });
 mountLegendPanel(document.body);

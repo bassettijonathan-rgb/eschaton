@@ -42,5 +42,6 @@ export const DEFAULT_WORLD_SITUATION: WorldSituation = {
   },
   allocationMethod: 'meanValue',
   howitzerAt: { lon: -82.95, lat: 42.31 },
+  clock: { start: 13 * 60 + 30, end: 16 * 60 },
   seed: 1996,
 };

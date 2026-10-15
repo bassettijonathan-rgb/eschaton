@@ -449,6 +449,128 @@ body {
   border-collapse: collapse;
 }
 
+.game-panel {
+  top: 150px;
+  bottom: auto;
+  width: min(24rem, calc(100vw - 32px));
+  max-height: calc(100vh - 230px);
+  border-left-color: var(--eta-red);
+}
+
+.game-panel h3 {
+  margin: 10px 0 4px;
+  font-size: 0.85rem;
+}
+
+.game-panel button,
+.game-panel select,
+.game-panel input[type='text'],
+.game-panel textarea {
+  font: inherit;
+}
+
+.game-panel button {
+  padding: 2px 8px;
+  margin: 2px 0;
+  cursor: pointer;
+}
+
+.game-panel ul {
+  margin: 4px 0;
+  padding-left: 1.1em;
+}
+
+.game-status {
+  margin: 6px 0;
+  font-weight: bold;
+}
+
+.defcon-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  list-style: none;
+  margin: 4px 0;
+  padding: 0;
+}
+
+.game-panel .defcon-row {
+  padding-left: 0;
+}
+
+.defcon-row li {
+  padding: 1px 6px;
+  border: 1px solid rgba(29, 35, 38, 0.3);
+  font-variant-numeric: tabular-nums;
+}
+
+.defcon-row li.max {
+  background: var(--eta-red);
+  color: #fff;
+}
+
+.game-row,
+.pact-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  align-items: center;
+  margin: 4px 0;
+}
+
+.game-panel textarea {
+  width: 100%;
+}
+
+.inbox {
+  max-height: 10rem;
+  overflow: auto;
+}
+
+.game-feedback {
+  min-height: 1em;
+  margin: 6px 0;
+  color: var(--eta-red);
+}
+
+.game-log {
+  font-size: 0.78rem;
+  color: var(--eta-gray);
+}
+
+.handoff {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #1d2326;
+}
+
+.handoff[hidden] {
+  display: none;
+}
+
+.handoff-card {
+  max-width: 26rem;
+  padding: 20px 24px;
+  background: var(--paper);
+  border-left: 6px solid var(--eta-red);
+}
+
+.handoff-card h2 {
+  margin: 0 0 8px;
+  font-size: 1.2rem;
+}
+
+.handoff-card button {
+  font: inherit;
+  padding: 4px 12px;
+  margin-right: 8px;
+  cursor: pointer;
+}
+
 @media (max-width: 700px) {
   .inspector {
     top: auto;
@@ -465,5 +587,9 @@ body {
   .lob-panel {
     bottom: 112px;
     max-height: 45vh;
+  }
+  .game-panel {
+    top: 120px;
+    max-height: 40vh;
   }
 }
