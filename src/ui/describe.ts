@@ -11,7 +11,8 @@ import type { EndStatReport, StrikeReport, Tally } from '../engine/endstat';
 import { HOWITZER_RANGE_KM, type Detonation, type LobResult } from '../engine/lob';
 import { greatCircleKm } from '../engine/projection';
 import { territoryAt } from '../engine/territory';
-import type { OwnerId, TargetItem } from '../engine/types';
+import { defsFor } from '../engine/scenario';
+import type { OwnerId, TargetItem, WorldSituation } from '../engine/types';
 import { COMBATANT_IDS } from '../engine/types';
 
 export interface Description {
@@ -19,9 +20,9 @@ export interface Description {
   readonly lines: readonly string[];
 }
 
-export function ownerName(owner: OwnerId): string {
+export function ownerName(owner: OwnerId, ws?: WorldSituation): string {
   if ((COMBATANT_IDS as readonly string[]).includes(owner)) {
-    const def = COMBATANTS[owner as keyof typeof COMBATANTS];
+    const def = (ws ? defsFor(ws) : COMBATANTS)[owner as keyof typeof COMBATANTS];
     return `${def.code} (${def.name})`;
   }
   return `${UNPLAYED_NATIONS[owner as keyof typeof UNPLAYED_NATIONS].name}, which nobody plays`;
@@ -29,13 +30,25 @@ export function ownerName(owner: OwnerId): string {
 
 const fmtPoints = (p: number): string => (Number.isInteger(p) ? String(p) : p.toFixed(1));
 
-export function describeTarget(item: TargetItem): Description {
+export function describeTarget(item: TargetItem, ws?: WorldSituation): Description {
   const garment = garmentFor(item);
   const lines = [
     `On the court: ${garment.label.charAt(0).toLowerCase()}${garment.label.slice(1)}.`,
     `On the map: ${TARGET_TYPE_LABELS[item.type]}.`,
-    `Belongs to ${ownerName(item.owner)}.`,
+    `Belongs to ${ownerName(item.owner, ws)}.`,
   ];
+  const lost = ws?.losses?.[item.id] ?? 0;
+  const gone = ws?.evacuated?.[item.id] ?? 0;
+  if (lost > 0)
+    lines.push(
+      lost >= 1
+        ? item.type === 'MAMA'
+          ? 'Silent since the TRIGSIT: nobody left to count.'
+          : 'Destroyed in the TRIGSIT, before play: worth nothing now.'
+        : `The TRIGSIT has already cost it ${(lost * 100).toFixed(0)}% of its ${item.type === 'MAMA' ? 'people' : 'value'}.`,
+    );
+  if (gone > 0 && lost < 1)
+    lines.push(`${(gone * 100).toFixed(0)}% of its people were evacuated before play.`);
   if (item.population !== undefined) lines.push(`Population ${String(item.population)} million.`);
   const isUnplayed = !(COMBATANT_IDS as readonly string[]).includes(item.owner);
   lines.push(
@@ -48,7 +61,7 @@ export function describeTarget(item: TargetItem): Description {
   const range = MOBILE_RANGE_KM[item.type];
   lines.push(
     item.mobile && range !== undefined
-      ? `Mobile: ${ownerName(item.owner)} may move it up to ${String(range)} km at a time, at sea.`
+      ? `Mobile: ${ownerName(item.owner, ws)} may move it up to ${String(range)} km at a time, at sea.`
       : 'Fixed to the map: moving it would be tampering with the map, not a move in the game.',
   );
   if (garment.legendNote) lines.push(garment.legendNote);

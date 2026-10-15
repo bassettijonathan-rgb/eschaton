@@ -231,4 +231,70 @@ export interface WorldSituation {
   /** The game's clock, in minutes after midnight: when play starts and when the siren ends it. */
   readonly clock?: { readonly start: number; readonly end: number };
   readonly seed: number;
+  /** The scenario's own TRIGSIT, which the game-master proposes instead of a precedent. */
+  readonly trigsit?: Trigsit;
+  /** Who plays whom, when the scenario says. */
+  readonly cast?: Cast;
+  /** Real weather the day brings to the East Courts, by the game clock. EndStat never reads it. */
+  readonly courtWeatherAt?: readonly CourtWeatherChange[];
+  /** New names, when a TRIGSIT has changed who a Combatant is (LIBSYR becomes IRLIBSYR). */
+  readonly codes?: Partial<Record<CombatantId, string>>;
+  /** Unplayed nations that have thrown in with a Combatant: their garments are its now. */
+  readonly allies?: Partial<Record<UnplayedNationId, CombatantId>>;
+  /** Share of a garment already lost before play: a site's value, a city's people. */
+  readonly losses?: Readonly<Record<string, number>>;
+  /** Share of a city's people evacuated before play. */
+  readonly evacuated?: Readonly<Record<string, number>>;
+  /** Hostile acts before play. The Decision Tree counts them as strikes. */
+  readonly incidents?: readonly Incident[];
+}
+
+/** A hostile act in a TRIGSIT, by one Combatant against another. */
+export interface Incident {
+  readonly by: CombatantId;
+  readonly against: CombatantId;
+  readonly what: string;
+}
+
+/** What a TRIGSIT event does to the World Situation once the TRIGSIT stands. */
+export type SituationChanges = Pick<
+  WorldSituation,
+  'codes' | 'allies' | 'losses' | 'evacuated' | 'incidents'
+>;
+
+export interface TrigsitEvent {
+  readonly text: string;
+  /** Combatants whose DEFCON goes up one step. */
+  readonly raise?: readonly CombatantId[];
+  readonly changes?: SituationChanges;
+  /** The game-master asks EndStat's Decision Tree what this Combatant must do, and says so. */
+  readonly posit?: CombatantId;
+}
+
+export interface Trigsit {
+  readonly id: string;
+  readonly title: string;
+  readonly events: readonly TrigsitEvent[];
+  /** Combatants whose DEFCON goes up one step when the TRIGSIT stands. */
+  readonly raise?: readonly CombatantId[];
+}
+
+export interface CastMember {
+  readonly name: string;
+  /** Overrides the Combatant's usual role for this seat. */
+  readonly role?: string;
+}
+
+export interface Cast {
+  readonly gameMaster: string;
+  /** The former game-master who corrects the math from outside the fence. */
+  readonly emeritus: string;
+  /** In the order of the Combatant's roles (its first player is its head of state). */
+  readonly combatants: Partial<Record<CombatantId, readonly (CastMember | undefined)[]>>;
+}
+
+export interface CourtWeatherChange {
+  readonly at: number;
+  readonly precipitation: Precipitation;
+  readonly text: string;
 }

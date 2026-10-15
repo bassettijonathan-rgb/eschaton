@@ -27,6 +27,7 @@ import {
 } from './effects';
 import type { Detonation, LaunchOrder } from './lob';
 import { courtMetresToKm, project } from './projection';
+import { ownerIn, startingPopulation } from './scenario';
 import { ownerAt } from './territory';
 import type {
   CombatantDef,
@@ -238,7 +239,7 @@ export function computeEndStat(
     if (!c) {
       c = {
         item,
-        population: item.population ?? 0,
+        population: startingPopulation(ws, item),
         dead: 0,
         injured: 0,
         shortened: 0,
@@ -249,7 +250,12 @@ export function computeEndStat(
     }
     return c;
   };
-  const destroyed = new Map<string, number>();
+  // Sites the TRIGSIT has already damaged start part destroyed.
+  const destroyed = new Map<string, number>(
+    Object.entries(ws.losses ?? {}).filter(([id]) =>
+      items.some((t) => t.id === id && t.type !== 'MAMA'),
+    ),
+  );
   const capacity = new Map<CombatantId, number>(playing.map((id) => [id, 1]));
   const hardening = new Map<CombatantId, number>(
     playing.map((id) => [id, empHardening(econ(id).civilDefenseSpending, econ(id).militaryBudget)]),
@@ -310,6 +316,10 @@ export function computeEndStat(
         if (h.item.type === 'MAMA') {
           const c = cityState(h.item);
           const alive = c.population - c.dead;
+          if (c.dead === 0 && c.population < (h.item.population ?? 0))
+            steps.push(
+              `Before play, the TRIGSIT left ${mil(c.population)} of its ${mil(h.item.population ?? 0)} in the city.`,
+            );
           const blastShare = BLAST_DEATHS_DIRECT * severity * severity;
           deaths = alive * blastShare;
           injured = (alive - deaths) * BLAST_INJURED_DIRECT * severity;
@@ -340,6 +350,10 @@ export function computeEndStat(
           if (scoring === 'inddir' && severity >= FIRESTORM_SEVERITY) isSacpop = true;
         } else {
           const before = destroyed.get(h.item.id) ?? 0;
+          if (before > 0 && before === ws.losses?.[h.item.id])
+            steps.push(
+              `Already ${(before * 100).toFixed(0)}% destroyed before play, in the TRIGSIT.`,
+            );
           const share =
             HARDENED.has(h.item.type) && h.kind === 'indirect' ? severity ** 3 : severity;
           destruction = (1 - before) * share;
@@ -384,7 +398,7 @@ export function computeEndStat(
       for (const m of mamas) {
         const dose = falloutDose(plume, project(m.at));
         const known = cities.get(m.id);
-        const alive = (known?.population ?? m.population ?? 0) - (known?.dead ?? 0);
+        const alive = (known?.population ?? startingPopulation(ws, m)) - (known?.dead ?? 0);
         const rc = radiationCasualties(alive, dose);
         if (rc.deaths === 0 && rc.shortened === 0) continue;
         const c = cityState(m);
@@ -413,7 +427,7 @@ export function computeEndStat(
           `  EMP ${why}: ${defs[id].code} loses ${(loss * 100).toFixed(1)}% of its communication capacity (${(h * 100).toFixed(0)}% shielded by civil defence), now ${(after * 100).toFixed(0)}%.`,
         );
       };
-      const land = ownerAt(d.lonLat);
+      const land = ownerIn(ws, ownerAt(d.lonLat));
       if (isPlaying(land)) lose(land, EMP_LOSS_PER_DETONATION, 'over its territory');
       for (const h of hits) {
         const o = h.item.owner;

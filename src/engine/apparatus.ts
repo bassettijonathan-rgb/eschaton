@@ -122,10 +122,16 @@ export function layoutApparatus(
 
   const cart = project(CART_AT);
   place('cart', 'cart', "Lord's cart, with the Yushityu portable running EndStat", cart);
-  place('game-master', 'gameMaster', 'The game-master, wearing the beanie', {
-    x: cart.x - 1,
-    y: cart.y,
-  });
+  const gm = ws.cast?.gameMaster;
+  place(
+    'game-master',
+    'gameMaster',
+    gm ? `${gm}, the game-master, wearing the beanie` : 'The game-master, wearing the beanie',
+    {
+      x: cart.x - 1,
+      y: cart.y,
+    },
+  );
   place('hopper', 'hopper', 'The ball hopper: balls nobody was allocated', {
     x: cart.x + 1,
     y: cart.y,
@@ -136,11 +142,12 @@ export function layoutApparatus(
     const stand = project(def.stand);
     const n = def.teamSize.min;
     for (let i = 0; i < n; i++) {
-      const role = def.roles[i] ?? 'player';
+      const who = ws.cast?.combatants[id]?.[i];
+      const role = who?.role ?? def.roles[i] ?? 'player';
       place(
         `${id.toLowerCase()}-player-${String(i + 1)}`,
         'player',
-        `${def.code} ${role}`,
+        who ? `${who.name}, ${def.code} ${role}` : `${def.code} ${role}`,
         { x: stand.x + (i - (n - 1) / 2) * 0.9, y: stand.y },
         id,
       );
