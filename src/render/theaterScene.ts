@@ -75,7 +75,7 @@ function courtNumberLabel(court: Court): THREE.Mesh {
   geometry.rotateX(-Math.PI / 2);
   const mesh = new THREE.Mesh(
     geometry,
-    new THREE.MeshBasicMaterial({ map: texture, transparent: true }),
+    new THREE.MeshBasicMaterial({ map: texture, transparent: true, depthWrite: false }),
   );
   // In the south run-off, behind the baseline.
   mesh.position.copy(toWorld(court.centerX, court.cell.minY + 3.2, 0.003));
@@ -192,6 +192,17 @@ export function buildTheaterScene(): TheaterScene {
   // A low November sun from the south-west.
   sun.position.set(-40, 35, 50);
   sun.castShadow = true;
+  // Cover the whole theater and pavilion with the shadow map, or its frustum edge shows on the courts.
+  const cam = sun.shadow.camera;
+  cam.left = -60;
+  cam.right = 60;
+  cam.top = 45;
+  cam.bottom = -45;
+  cam.near = 1;
+  cam.far = 200;
+  sun.shadow.mapSize.set(4096, 4096);
+  sun.shadow.bias = -0.0005;
+  sun.shadow.normalBias = 0.02;
   scene.add(sun);
 
   return { scene, courts };

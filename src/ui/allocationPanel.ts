@@ -1,28 +1,20 @@
 /**
- * The game-master's view of megatonnage allocation for the default World
- * Situation. Players never see this table in play: buckets hide counts.
+ * EndStat's megatonnage allocation. The game-master sees every Combatant's
+ * line; a Combatant sees only its own, because buckets hide counts.
  */
-import { ALLOCATION_METHOD_LABELS, allocate, type Allocation } from '../engine/allocation';
+import { ALLOCATION_METHOD_LABELS, type Allocation } from '../engine/allocation';
+import { canSeeBucket, type Viewer } from '../engine/buckets';
 import { COMBATANTS } from '../engine/data/combatants';
-import { DEFAULT_WORLD_SITUATION } from '../engine/data/worldSituation';
-import { createRng } from '../engine/rng';
 import type { AllocationMethod } from '../engine/types';
+import { el } from './dom';
+import { getState, onStateChange, setMethod } from './store';
+import { getViewer, onViewerChange } from './viewer';
 
 const METHODS = Object.keys(ALLOCATION_METHOD_LABELS) as AllocationMethod[];
 
-function el<K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  props: Partial<HTMLElementTagNameMap[K]> = {},
-  children: (Node | string)[] = [],
-): HTMLElementTagNameMap[K] {
-  const node = document.createElement(tag);
-  Object.assign(node, props);
-  node.append(...children);
-  return node;
-}
-
-function renderTable(allocation: Allocation): HTMLTableElement {
-  const rows = allocation.lines.map((l) => {
+function renderTable(allocation: Allocation, viewer: Viewer): HTMLTableElement {
+  const visible = allocation.lines.filter((l) => canSeeBucket(viewer, l.combatant));
+  const rows = visible.map((l) => {
     const def = COMBATANTS[l.combatant];
     const audit = el('details', {}, [
       el('summary', {}, ['How']),
@@ -41,8 +33,12 @@ function renderTable(allocation: Allocation): HTMLTableElement {
     row.dataset['combatant'] = l.combatant;
     return row;
   });
+  const caption =
+    viewer.kind === 'gameMaster'
+      ? `${String(allocation.totalWarheads)} of 400 balls allocated`
+      : "Your bucket only. Every other Combatant's is hidden from you.";
   return el('table', {}, [
-    el('caption', {}, [`${String(allocation.totalWarheads)} of 400 balls allocated`]),
+    el('caption', {}, [caption]),
     el('thead', {}, [
       el('tr', {}, [
         el('th', { scope: 'col' }, ['Combatant']),
@@ -60,28 +56,26 @@ export function mountAllocationPanel(host: HTMLElement): void {
     'select',
     { id: 'allocation-method' },
     METHODS.map((m) =>
-      el('option', { value: m, selected: m === DEFAULT_WORLD_SITUATION.allocationMethod }, [
-        ALLOCATION_METHOD_LABELS[m],
-      ]),
+      el('option', { value: m, selected: m === getState().method }, [ALLOCATION_METHOD_LABELS[m]]),
     ),
   );
   const tableHost = el('div', { className: 'allocation-table' });
   const update = (): void => {
-    const method = select.value as AllocationMethod;
-    const allocation = allocate(DEFAULT_WORLD_SITUATION, COMBATANTS, {
-      method,
-      rng: createRng(DEFAULT_WORLD_SITUATION.seed),
-    });
-    tableHost.replaceChildren(renderTable(allocation));
+    tableHost.replaceChildren(renderTable(getState().allocation, getViewer()));
+    select.disabled = getViewer().kind !== 'gameMaster';
   };
-  select.addEventListener('change', update);
+  select.addEventListener('change', () => {
+    setMethod(select.value as AllocationMethod);
+  });
+  onStateChange(update);
+  onViewerChange(update);
   update();
 
   host.append(
     el('details', { className: 'panel allocation-panel', id: 'allocation-panel' }, [
       el('summary', {}, ['EndStat: megatonnage allocation']),
       el('p', { className: 'panel-note' }, [
-        "Game-master's view of the default World Situation. In play, each Combatant sees only its own bucket.",
+        'Only the game-master can change the method. Each Combatant sees only its own bucket.',
       ]),
       el('label', { htmlFor: 'allocation-method' }, ['Method ']),
       select,

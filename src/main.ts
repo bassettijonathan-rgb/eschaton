@@ -1,9 +1,28 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { layoutApparatus } from './engine/apparatus';
+import { COMBATANTS } from './engine/data/combatants';
+import { TARGETS } from './engine/data/targets';
 import { COURTS } from './engine/theater';
+import { COMBATANT_IDS, type CombatantId } from './engine/types';
+import { buildApparatus, buildPavilion } from './render/apparatus';
+import { buildGarments, type PickTag } from './render/garments';
+import { buildMapMesh } from './render/mapTexture';
 import { buildTheaterScene } from './render/theaterScene';
 import { mountAllocationPanel } from './ui/allocationPanel';
+import { describeApparatus, describeTarget } from './ui/describe';
+import { mountInspector } from './ui/inspector';
+import { mountLegendPanel } from './ui/legendPanel';
+import { getState } from './ui/store';
+import { getViewer, setViewer } from './ui/viewer';
 import './style.css';
+
+declare global {
+  interface Window {
+    /** Test hooks: where an object named on the courts appears on screen. */
+    eschaton?: { screenPosition(name: string): { x: number; y: number } | null };
+  }
+}
 
 function webglAvailable(): boolean {
   try {
@@ -14,6 +33,14 @@ function webglAvailable(): boolean {
   }
 }
 
+function findPickTag(object: THREE.Object3D | null): PickTag | undefined {
+  for (let o = object; o; o = o.parent) {
+    const pick = o.userData['pick'] as PickTag | undefined;
+    if (pick) return pick;
+  }
+  return undefined;
+}
+
 function start(container: HTMLElement): void {
   if (!webglAvailable()) {
     container.textContent =
@@ -22,23 +49,34 @@ function start(container: HTMLElement): void {
     return;
   }
 
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  const renderer = new THREE.WebGLRenderer({ antialias: true, logarithmicDepthBuffer: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;
   container.appendChild(renderer.domElement);
-  renderer.domElement.setAttribute('aria-label', 'East Courts 6 through 9, seen from above');
+  renderer.domElement.setAttribute(
+    'aria-label',
+    'East Courts 6 through 9 seen from above, with the world drawn on them and the target garments laid out',
+  );
   renderer.domElement.setAttribute('role', 'img');
 
   const { scene, courts } = buildTheaterScene();
-  const camera = new THREE.PerspectiveCamera(40, 1, 0.5, 600);
-  camera.position.set(0, 70, 55);
+  scene.add(buildMapMesh());
+  const garments = buildGarments(TARGETS);
+  scene.add(garments);
+  const layout = layoutApparatus(getState().situation, COMBATANTS);
+  const apparatus = buildApparatus(layout);
+  scene.add(apparatus);
+  const pavilion = buildPavilion();
+  scene.add(pavilion);
 
+  const camera = new THREE.PerspectiveCamera(40, 1, 0.05, 600);
+  camera.position.set(0, 70, 55);
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.target.set(0, 0, 0);
   controls.enableDamping = true;
-  controls.minDistance = 10;
+  controls.minDistance = 1.5;
+  controls.zoomToCursor = true;
   controls.maxDistance = 200;
-  // Keep the camera above the courts: from straight down to a low tilt.
   controls.minPolarAngle = 0;
   controls.maxPolarAngle = Math.PI * 0.45;
 
@@ -51,12 +89,109 @@ function start(container: HTMLElement): void {
   window.addEventListener('resize', resize);
   resize();
 
+  // Picking: a click (not a drag) names what is under the pointer.
+  const inspector = mountInspector(document.body);
+  const raycaster = new THREE.Raycaster();
+  const marker = new THREE.Mesh(
+    new THREE.RingGeometry(0.22, 0.26, 40),
+    new THREE.MeshBasicMaterial({ color: 0xffe066, side: THREE.DoubleSide, depthTest: false }),
+  );
+  marker.rotation.x = -Math.PI / 2;
+  marker.visible = false;
+  marker.renderOrder = 10;
+  scene.add(marker);
+  let down: { x: number; y: number } | null = null;
+  let selected: PickTag | undefined;
+
+  const showSelected = (): void => {
+    if (!selected) return;
+    if (selected.kind === 'target') {
+      const item = TARGETS.find((t) => t.id === selected?.id);
+      if (item) inspector.show(describeTarget(item));
+    } else {
+      const a = layout.find((x) => x.id === selected?.id);
+      if (a) inspector.show(describeApparatus(a, getViewer(), getState().supply));
+      else if (selected.id === 'pavilion')
+        inspector.show({
+          title: "The spectators' pavilion",
+          lines: ['Outside the fence. Spectators, and Pemulis, watch from here.'],
+        });
+    }
+  };
+
+  renderer.domElement.addEventListener('pointerdown', (e) => {
+    down = { x: e.clientX, y: e.clientY };
+  });
+  renderer.domElement.addEventListener('pointerup', (e) => {
+    if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 5) return;
+    const rect = renderer.domElement.getBoundingClientRect();
+    const ndc = new THREE.Vector2(
+      ((e.clientX - rect.left) / rect.width) * 2 - 1,
+      -((e.clientY - rect.top) / rect.height) * 2 + 1,
+    );
+    raycaster.setFromCamera(ndc, camera);
+    const hit = raycaster.intersectObjects([garments, apparatus, pavilion], true)[0];
+    selected = hit ? findPickTag(hit.object) : undefined;
+    if (!selected || !hit) {
+      marker.visible = false;
+      inspector.clear();
+      return;
+    }
+    let owner: THREE.Object3D | null = hit.object;
+    while (owner && !owner.userData['pick']) owner = owner.parent;
+    if (owner) marker.position.set(owner.position.x, 0.01, owner.position.z);
+    marker.visible = true;
+    showSelected();
+  });
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      selected = undefined;
+      marker.visible = false;
+      inspector.clear();
+    }
+  });
+
+  // Who is looking at the screen.
+  const viewSelect = document.getElementById('viewer') as HTMLSelectElement | null;
+  if (viewSelect) {
+    viewSelect.append(
+      ...COMBATANT_IDS.map((id) => {
+        const o = document.createElement('option');
+        o.value = id;
+        o.textContent = COMBATANTS[id].code;
+        return o;
+      }),
+    );
+    viewSelect.addEventListener('change', () => {
+      const v = viewSelect.value;
+      setViewer(v === 'gm' ? { kind: 'gameMaster' } : { kind: 'combatant', id: v as CombatantId });
+      showSelected();
+    });
+  }
+
+  window.eschaton = {
+    screenPosition(name) {
+      const obj = scene.getObjectByName(name);
+      if (!obj) return null;
+      const p = new THREE.Vector3();
+      obj.getWorldPosition(p);
+      p.y += 0.02;
+      p.project(camera);
+      const rect = renderer.domElement.getBoundingClientRect();
+      return {
+        x: rect.left + ((p.x + 1) / 2) * rect.width,
+        y: rect.top + ((1 - p.y) / 2) * rect.height,
+      };
+    },
+  };
+
   renderer.setAnimationLoop(() => {
     controls.update();
     renderer.render(scene, camera);
   });
 
   document.body.dataset['courts'] = String(courts.length);
+  document.body.dataset['garments'] = String(garments.children.length);
   document.body.dataset['ready'] = 'true';
 }
 
@@ -66,5 +201,5 @@ start(container);
 
 const legend = document.getElementById('court-list');
 if (legend) legend.textContent = COURTS.map((c) => `Court ${String(c.number)}`).join(' · ');
-
 mountAllocationPanel(document.body);
+mountLegendPanel(document.body);

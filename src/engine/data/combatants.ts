@@ -166,7 +166,7 @@ export const COMBATANTS: Readonly<Record<CombatantId, CombatantDef>> = {
     },
     mirvCap: 1,
     yahtzeeDice: 1,
-    stand: { lon: 25, lat: 31 },
+    stand: { lon: 18, lat: 28 },
     expandsTo: { code: 'IRLIBSYR', name: 'Iran–Libya–Syria' },
   },
   SOUTHAF: {
