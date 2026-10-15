@@ -384,6 +384,10 @@ body {
   margin-top: 10px;
 }
 
+.crunch-controls[hidden] {
+  display: none;
+}
+
 .crunch-controls button,
 .yushityu-crunch button {
   font: inherit;

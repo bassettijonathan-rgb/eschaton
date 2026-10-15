@@ -2,9 +2,14 @@
  * The Yushityu portable on Lord's cart, running EndStat: the running
  * tallies, the strike log with its working, and the crunch that confirms a
  * winner. The game-master sees every tally; a Combatant sees only its own.
+ * The Decision Tree says what EndStat dictates for a Combatant, and "Appeal
+ * to Pemulis" prints the whole audit trail behind every number.
  */
+import { POSTURE_LABELS, decisionTree } from '../engine/ai';
 import { canSeeBucket, type Viewer } from '../engine/buckets';
 import { COMBATANTS } from '../engine/data/combatants';
+import type { GameState } from '../engine/game';
+import type { CombatantId } from '../engine/types';
 import type { EndStatReport } from '../engine/endstat';
 import { describeStrike, formatRatio } from './describe';
 import { el } from './dom';
@@ -76,6 +81,80 @@ function strikeLog(report: EndStatReport): HTMLElement {
       ]),
     ),
   );
+}
+
+/** What the Decision Tree dictates for one Combatant, branch by branch. */
+function treeView(state: GameState, id: CombatantId): HTMLElement {
+  const d = decisionTree(state, id);
+  const what = d.target && d.platform ? ` Target: ${d.target.name}, from ${d.platform.name}.` : '';
+  return el('div', { id: 'decision-tree' }, [
+    el('p', { id: 'decision-posture' }, [
+      `${COMBATANTS[id].code}: ${POSTURE_LABELS[d.posture]}.${what}`,
+    ]),
+    el(
+      'ol',
+      { className: 'strike-log' },
+      d.steps.map((x) => el('li', {}, [x])),
+    ),
+  ]);
+}
+
+/**
+ * The audit trail behind every number this viewer may see: the allocation,
+ * the Decision Tree, each strike's working and the tallies. A Combatant gets
+ * its own allocation and tally and the public strike log; the game-master
+ * gets everything.
+ */
+export function auditTrail(state: GameState, viewer: Viewer): string[] {
+  const lines: string[] = ['ALLOCATION', ...state.allocation.steps];
+  const ids =
+    viewer.kind === 'gameMaster'
+      ? state.situation.combatants
+      : state.situation.combatants.filter((id) => id === viewer.id);
+  for (const line of state.allocation.lines)
+    if (ids.includes(line.combatant))
+      lines.push(`${COMBATANTS[line.combatant].code}:`, ...line.steps.map((x) => `  ${x}`));
+  lines.push('', 'DECISION TREE');
+  for (const id of ids)
+    lines.push(`${COMBATANTS[id].code}:`, ...decisionTree(state, id).steps.map((x) => `  ${x}`));
+  lines.push('', 'STRIKES');
+  for (const strike of state.endstat.strikes) lines.push(...strike.working);
+  if (state.endstat.strikes.length === 0) lines.push('Nothing has been lobbed yet.');
+  lines.push('', 'TALLIES');
+  if (viewer.kind === 'gameMaster') lines.push(...state.endstat.audit);
+  else {
+    const t = state.endstat.tallies[viewer.id];
+    if (t) {
+      lines.push(
+        `${COMBATANTS[t.combatant].code}: INDDIR ${pts(t.inddirRaw)} raw, SUFDDIR ${pts(t.sufddirRaw)} raw.`,
+        ...t.corrections.map(
+          (c) => `  ${c.name} on ${c.appliesTo}: × ${c.factor.toFixed(3)} (${c.reason})`,
+        ),
+        `  SACPOP penalty ${pts(t.sacpopPenalty)}. Corrected INDDIR ${pts(t.inddir)}, SUFDDIR ${pts(t.sufddir)}, ratio ${formatRatio(t)}.`,
+      );
+    }
+  }
+  return lines;
+}
+
+function mountAppeal(host: HTMLElement): () => void {
+  const lines = el('pre', { className: 'crunch-lines', id: 'pemulis-lines' });
+  const close = el('button', { type: 'button' }, ['Close']);
+  const dialog = el('dialog', { className: 'yushityu-crunch', id: 'pemulis' }, [
+    el('h2', {}, ['Appeal to Pemulis']),
+    el('p', {}, ['From outside the fence, the full working behind every figure on this screen.']),
+    lines,
+    close,
+  ]);
+  dialog.setAttribute('aria-label', 'The audit trail behind EndStat’s numbers');
+  close.addEventListener('click', () => {
+    dialog.close();
+  });
+  host.append(dialog);
+  return () => {
+    lines.textContent = auditTrail(getState(), getViewer()).join('\n');
+    dialog.showModal();
+  };
 }
 
 /** The crunch: EndStat prints its working, then names the winner. */
@@ -162,30 +241,64 @@ export function mountYushityu(host: HTMLElement): Yushityu {
   confirm.addEventListener('click', () => {
     crunch(authentic.checked);
   });
+  const appeal = el('button', { type: 'button', id: 'appeal-pemulis' }, ['Appeal to Pemulis']);
+  appeal.addEventListener('click', mountAppeal(host));
+
+  // The Decision Tree: for the game-master, any Combatant; for a Combatant, itself.
+  const tree = el('div', {});
+  const treeFor = el('select', { id: 'tree-for' });
+  treeFor.append(
+    ...getState().situation.combatants.map((id) =>
+      el('option', { value: id }, [COMBATANTS[id].code]),
+    ),
+  );
+  const treeRow = el('div', { className: 'crunch-controls' }, [
+    el('label', { htmlFor: 'tree-for' }, ['For ']),
+    treeFor,
+  ]);
+  const panel = el('details', { className: 'panel yushityu-panel', id: 'endstat-panel' });
+  const showTree = (): void => {
+    if (!panel.open) return;
+    const viewer = getViewer();
+    treeRow.hidden = viewer.kind !== 'gameMaster';
+    const id = viewer.kind === 'gameMaster' ? (treeFor.value as CombatantId) : viewer.id;
+    const state = getState();
+    tree.replaceChildren(
+      state.situation.combatants.includes(id)
+        ? treeView(state, id)
+        : el('p', { className: 'panel-note' }, ['Not playing this game.']),
+    );
+  };
+  treeFor.addEventListener('change', showTree);
 
   const update = (): void => {
     const report = getState().endstat;
     tallies.replaceChildren(talliesTable(report, getViewer()));
     log.replaceChildren(strikeLog(report));
+    showTree();
   };
   onStateChange(update);
   onViewerChange(update);
   update();
 
-  host.append(
-    el('details', { className: 'panel yushityu-panel', id: 'endstat-panel' }, [
-      el('summary', {}, ['EndStat on the Yushityu']),
-      el('div', { className: 'yushityu-screen' }, [
-        tallies,
-        el('h3', {}, ['Strikes']),
-        log,
-        el('div', { className: 'crunch-controls' }, [
-          confirm,
-          el('label', { htmlFor: 'endstat-authentic' }, [authentic, ' Authentic three hours']),
-        ]),
+  panel.append(
+    el('summary', {}, ['EndStat on the Yushityu']),
+    el('div', { className: 'yushityu-screen' }, [
+      tallies,
+      el('h3', {}, ['Strikes']),
+      log,
+      el('h3', {}, ['Decision Tree']),
+      treeRow,
+      tree,
+      el('div', { className: 'crunch-controls' }, [
+        confirm,
+        el('label', { htmlFor: 'endstat-authentic' }, [authentic, ' Authentic three hours']),
+        appeal,
       ]),
     ]),
   );
+  panel.addEventListener('toggle', showTree);
+  host.append(panel);
   return {
     crunch: () => {
       crunch(authentic.checked);

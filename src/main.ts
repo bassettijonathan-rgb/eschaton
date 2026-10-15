@@ -4,6 +4,7 @@ import { layoutApparatus } from './engine/apparatus';
 import { COMBATANTS } from './engine/data/combatants';
 import { TARGETS } from './engine/data/targets';
 import type { Viewer } from './engine/buckets';
+import { nextComputerAction } from './engine/ai';
 import { itemsOf, type Action } from './engine/game';
 import { platformsFor, solveSpeed, type LobResult } from './engine/lob';
 import { project, unproject } from './engine/projection';
@@ -22,6 +23,7 @@ import { mountInspector } from './ui/inspector';
 import { mountLegendPanel } from './ui/legendPanel';
 import { mountLobPanel, type LobPanelHooks } from './ui/lobPanel';
 import { dispatch, getState, launch, onStateChange } from './ui/store';
+import { getControllers, isFast, onComputersChange } from './ui/computers';
 import { mountGamePanel } from './ui/gamePanel';
 import { mountHandOff } from './ui/handoff';
 import { getViewer, setViewer } from './ui/viewer';
@@ -358,6 +360,22 @@ function start(container: HTMLElement): void {
       };
     },
   };
+
+  // The computer players move one action at a time, between flights and hand-offs.
+  const computerMove = (): void => {
+    if (flights.busy() || queue.length > 0) return;
+    if (document.getElementById('handoff')?.hidden === false) return;
+    const action = nextComputerAction(getState(), getControllers());
+    if (action) dispatch(action);
+  };
+  let cpuTimer = 0;
+  const pace = (): void => {
+    flights.timeScale = isFast() ? 12 : 1;
+    window.clearInterval(cpuTimer);
+    cpuTimer = window.setInterval(computerMove, isFast() ? 120 : 600);
+  };
+  onComputersChange(pace);
+  pace();
 
   renderer.setAnimationLoop(() => {
     controls.update();

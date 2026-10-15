@@ -161,8 +161,11 @@ export class FlightPlayer {
     this.segments.push({ flight, start, ball, trail, detonation, ending, done: false });
   }
 
+  /** How much faster than life the flights play. */
+  timeScale = 1;
+
   update(now: number): void {
-    const t = now - this.startedAt;
+    const t = (now - this.startedAt) * this.timeScale;
     for (const s of this.segments) {
       if (s.done || t < s.start) continue;
       const local = t - s.start;

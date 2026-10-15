@@ -86,6 +86,8 @@ export interface Pact {
   /** For a city trade: the city each party puts up. */
   readonly cities?: Readonly<Partial<Record<CombatantId, string>>>;
   readonly broken?: string;
+  /** Turned down at the summit, by whom. */
+  readonly declined?: string;
 }
 
 export interface Message {
@@ -161,6 +163,10 @@ export type Action =
       readonly to: LonLat;
     }
   | { readonly type: 'courtWeather'; readonly precipitation: Precipitation }
+  | { readonly type: 'reject'; readonly by: CombatantId }
+  | { readonly type: 'statement'; readonly by: CombatantId; readonly text: string }
+  | { readonly type: 'declinePact'; readonly by: CombatantId; readonly pact: number }
+  | { readonly type: 'renouncePact'; readonly by: CombatantId; readonly pact: number }
   | { readonly type: 'weatherAppeal'; readonly by: CombatantId };
 
 /** An order or message waiting for a human game-master's ruling (A14). */
@@ -210,6 +216,19 @@ export interface GameState {
   readonly positions: Readonly<Record<string, LonLat>>;
   /** The real weather over the East Courts. EndStat never reads it. */
   readonly courtWeather: Precipitation;
+  /** Combatants who have turned down the current draft of the World Situation. */
+  readonly rejectedBy: readonly CombatantId[];
+  /** How many drafts of the World Situation have failed to find a quorum. */
+  readonly failedDrafts: number;
+  /** What each Combatant has said in public: at the summit, claims about itself are bluffs or not. */
+  readonly statements: readonly Statement[];
+}
+
+export interface Statement {
+  readonly by: CombatantId;
+  readonly at: number;
+  readonly phase: Phase;
+  readonly text: string;
 }
 
 export interface Outcome {
@@ -281,6 +300,9 @@ export function newGame(
     ended: undefined,
     positions: {},
     courtWeather: 'none',
+    rejectedBy: [],
+    failedDrafts: 0,
+    statements: [],
   };
 }
 
@@ -369,12 +391,9 @@ export function launchProblems(state: GameState, order: LaunchOrder): Problem[] 
   ).map(hard);
   if (problems.length > 0) return problems;
   const by = order.combatant;
-  const ugc = state.beanie === 'red';
   const level = state.defcon[by] ?? STARTING_DEFCON;
   if (!order.aimAt) return [hard('Declare an aim point to the game-master first')];
-  const target = declaredTarget(order.aimAt, itemsOf(state));
-  const victim = target?.owner ?? ownerAt(order.aimAt);
-  const atCity = target?.type === 'MAMA';
+  const atCity = declaredTarget(order.aimAt, itemsOf(state))?.type === 'MAMA';
   if (level < LAUNCH_DEFCON)
     problems.push(
       soft(
@@ -385,6 +404,21 @@ export function launchProblems(state: GameState, order: LaunchOrder): Problem[] 
     problems.push(soft(`a MIRV jockstrap needs ${defconLabel(MIRV_DEFCON)} or higher`));
   if (atCity && level < CITY_DEFCON)
     problems.push(soft(`aiming at a city needs ${defconLabel(CITY_DEFCON)}`));
+  problems.push(...pactProblems(state, by, order.aimAt));
+  return problems;
+}
+
+/**
+ * What the pacts, the white beanie's cessation and the red beanie say about
+ * an aim point: the soft problems that are not about DEFCON.
+ */
+export function pactProblems(state: GameState, by: CombatantId, aimAt: LonLat): Problem[] {
+  const soft = (text: string): Problem => ({ text, hard: false });
+  const problems: Problem[] = [];
+  const ugc = state.beanie === 'red';
+  const target = declaredTarget(aimAt, itemsOf(state));
+  const victim = target?.owner ?? ownerAt(aimAt);
+  const atCity = target?.type === 'MAMA';
   if (!ugc && isPlaying(state, victim) && victim !== by) {
     const c = state.cessation;
     if (c && c.includes(by) && c.includes(victim))
@@ -590,7 +624,12 @@ export function apply(state: GameState, action: Action): Outcome {
       const fresh = newGame(ws, action.method);
       return done(
         say(
-          { ...fresh, humanGod: state.humanGod },
+          {
+            ...fresh,
+            humanGod: state.humanGod,
+            failedDrafts: state.failedDrafts,
+            log: state.failedDrafts > 0 ? state.log : fresh.log,
+          },
           `Allocation method changed to ${ALLOCATION_METHOD_LABELS[action.method]}.`,
         ),
       );
@@ -611,6 +650,23 @@ export function apply(state: GameState, action: Action): Outcome {
           'A quorum has endorsed the World Situation. The game-master proposes a TRIGSIT.',
         );
       }
+      return done(s);
+    }
+
+    case 'reject': {
+      if (state.phase !== 'worldSituation')
+        return refuse(state, 'The World Situation is already endorsed');
+      const p = needCombatant(action.by);
+      if (p.length) return refuse(state, ...p);
+      if (state.endorsedBy.includes(action.by) || state.rejectedBy.includes(action.by))
+        return refuse(state, `${code(action.by)} has already decided`);
+      let s: GameState = { ...state, rejectedBy: [...state.rejectedBy, action.by] };
+      s = say(s, `${code(action.by)} rejects the World Situation.`);
+      if (ws.combatants.length - s.rejectedBy.length < quorum(ws))
+        s = say(
+          { ...s, endorsedBy: [], rejectedBy: [], failedDrafts: s.failedDrafts + 1 },
+          'Too many rejections for a quorum: this draft of the World Situation fails, and the game-master redrafts it.',
+        );
       return done(s);
     }
 
@@ -688,7 +744,7 @@ export function apply(state: GameState, action: Action): Outcome {
     case 'acceptPact': {
       if (state.phase !== 'summit') return refuse(state, 'Pacts are made at the summit');
       const pact = state.pacts.find((p) => p.id === action.pact);
-      if (!pact) return refuse(state, 'No such proposal');
+      if (!pact || pact.declined) return refuse(state, 'No such proposal');
       if (!pact.parties.includes(action.by))
         return refuse(state, `${code(action.by)} is not party to it`);
       if (pact.acceptedBy.includes(action.by))
@@ -707,6 +763,71 @@ export function apply(state: GameState, action: Action): Outcome {
         [...pact.parties],
       );
       return done(s);
+    }
+
+    case 'declinePact': {
+      if (state.phase !== 'summit') return refuse(state, 'Pacts are made at the summit');
+      const pact = state.pacts.find((p) => p.id === action.pact);
+      if (!pact || pact.active || pact.declined) return refuse(state, 'No such proposal');
+      if (!pact.parties.includes(action.by) || action.by === pact.proposedBy)
+        return refuse(state, `${code(action.by)} cannot decline it`);
+      return done(
+        say(
+          {
+            ...state,
+            pacts: state.pacts.map((p) =>
+              p.id === pact.id ? { ...p, declined: code(action.by) } : p,
+            ),
+          },
+          `${code(action.by)} declines the proposed ${PACT_LABELS[pact.kind].toLowerCase()}.`,
+          [...pact.parties],
+        ),
+      );
+    }
+
+    case 'renouncePact': {
+      if (state.phase !== 'play' && state.phase !== 'summit')
+        return refuse(state, 'There is no pact in force to renounce');
+      const pact = state.pacts.find((p) => p.id === action.pact);
+      if (!pact?.active || pact.broken) return refuse(state, 'No such pact in force');
+      if (!pact.parties.includes(action.by))
+        return refuse(state, `${code(action.by)} is not party to it`);
+      return done(
+        say(
+          {
+            ...state,
+            pacts: state.pacts.map((p) =>
+              p.id === pact.id ? { ...p, broken: `renounced by ${code(action.by)}` } : p,
+            ),
+          },
+          `${code(action.by)} renounces its ${PACT_LABELS[pact.kind].toLowerCase()} with ${pact.parties
+            .filter((id) => id !== action.by)
+            .map(code)
+            .join(', ')}.`,
+          [...pact.parties],
+        ),
+      );
+    }
+
+    case 'statement': {
+      if (state.phase !== 'summit' && state.phase !== 'play')
+        return refuse(state, 'Statements are made at the summit and in play');
+      const p = needCombatant(action.by);
+      if (p.length) return refuse(state, ...p);
+      const text = action.text.trim();
+      if (!text) return refuse(state, 'The statement is empty');
+      return done(
+        say(
+          {
+            ...state,
+            statements: [
+              ...state.statements,
+              { by: action.by, at: state.clock, phase: state.phase, text },
+            ],
+          },
+          `${code(action.by)}: “${text}”`,
+        ),
+      );
     }
 
     case 'closeSummit': {
