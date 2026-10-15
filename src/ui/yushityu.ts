@@ -148,7 +148,12 @@ function mountCrunch(host: HTMLElement): (authentic: boolean) => void {
   };
 }
 
-export function mountYushityu(host: HTMLElement): void {
+export interface Yushityu {
+  /** Run EndStat's crunch, as the Confirm button does. */
+  readonly crunch: () => void;
+}
+
+export function mountYushityu(host: HTMLElement): Yushityu {
   const tallies = el('div', { className: 'endstat-tallies' });
   const log = el('div', {});
   const authentic = el('input', { type: 'checkbox', id: 'endstat-authentic' });
@@ -181,4 +186,9 @@ export function mountYushityu(host: HTMLElement): void {
       ]),
     ]),
   );
+  return {
+    crunch: () => {
+      crunch(authentic.checked);
+    },
+  };
 }

@@ -125,12 +125,20 @@ function hopper(): THREE.Group {
   return g;
 }
 
+/** What the game-master's beanie looks like in each state of the game. */
+export const BEANIE_COLOURS = {
+  gray: 0x8d9196,
+  white: 0xf7f7f2,
+  red: 0xc0392b,
+  black: 0x1a1a1a,
+} as const;
+
 function gameMaster(): THREE.Group {
   const g = person(0x8d9196, 0xa3202b, false);
-  // The beanie, white for now, with its propeller.
+  // The beanie (its colour follows the game: see BEANIE_COLOURS), with its propeller.
   const beanie = new THREE.Mesh(
     new THREE.SphereGeometry(0.115, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2),
-    lambert(0xf7f7f2),
+    lambert(BEANIE_COLOURS.gray),
   );
   beanie.position.y = 1.67;
   beanie.name = 'beanie';

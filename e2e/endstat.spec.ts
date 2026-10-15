@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { startPlay, viewAs } from './helpers';
 
 async function perfectLob(page: Page, combatant: string, platform: string, target: string) {
   await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
@@ -15,6 +16,7 @@ test('EndStat scores a strike, shows its working and confirms a winner', async (
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto('/');
+  await startPlay(page, { AMNAT: 6 });
   await perfectLob(page, 'AMNAT', 'Minot missile field', 'Moscow');
 
   await page.getByText('EndStat on the Yushityu').click();
@@ -52,8 +54,9 @@ test('a Combatant sees only its own tally, and the inspector reports the damage'
 }) => {
   test.setTimeout(90_000);
   await page.goto('/');
+  await startPlay(page, { SOVWAR: 6 });
   await perfectLob(page, 'SOVWAR', 'Dombarovsky silos', 'Detroit');
-  await page.getByLabel('Viewing as').selectOption('AMNAT');
+  await viewAs(page, 'AMNAT');
   await page.getByText('EndStat on the Yushityu').click();
   await expect(page.locator('#endstat-tallies tr[data-combatant]')).toHaveCount(1);
   await expect(page.locator('#endstat-tallies tr[data-combatant]')).toHaveAttribute(

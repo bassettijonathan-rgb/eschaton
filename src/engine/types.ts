@@ -228,5 +228,7 @@ export interface WorldSituation {
   readonly allocationMethod: AllocationMethod;
   /** Where the insurgent cell's howitzer is emplaced, if it plays. */
   readonly howitzerAt?: LonLat;
+  /** The game's clock, in minutes after midnight: when play starts and when the siren ends it. */
+  readonly clock?: { readonly start: number; readonly end: number };
   readonly seed: number;
 }

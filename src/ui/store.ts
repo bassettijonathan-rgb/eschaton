@@ -1,87 +1,64 @@
 /**
- * The page's game state for now: the World Situation, its allocation and the
- * buckets filled from it. Later milestones replace this with the full game.
+ * The page's game: the engine's GameState, its action log, and the actions
+ * the panels dispatch. Every change goes through the engine's reducer, so
+ * the game on screen is always one that replays from its seed and log.
  */
-import { allocate, type Allocation } from '../engine/allocation';
-import { fillBuckets, takeFromBucket, type BallSupply } from '../engine/buckets';
-import { COMBATANTS } from '../engine/data/combatants';
 import { DEFAULT_WORLD_SITUATION } from '../engine/data/worldSituation';
-import { endstatKillRadius } from '../engine/effects';
-import { computeEndStat, type EndStatReport } from '../engine/endstat';
-import { resolveLob, validateLaunch, type LaunchOrder, type LobResult } from '../engine/lob';
-import { createRng, type Rng } from '../engine/rng';
-import type { AllocationMethod, WorldSituation } from '../engine/types';
+import { apply, newGame, type Action, type GameState, type Outcome } from '../engine/game';
+import type { LaunchOrder, LobResult } from '../engine/lob';
+import type { AllocationMethod } from '../engine/types';
 
-export interface PageState {
-  readonly situation: WorldSituation;
-  readonly method: AllocationMethod;
-  readonly allocation: Allocation;
-  readonly supply: BallSupply;
-  /** Every lob so far, oldest first. */
-  readonly lobs: readonly LobResult[];
-  /** EndStat's running report on the lobs so far. */
-  readonly endstat: EndStatReport;
-}
+export type PageState = GameState;
 
-function compute(situation: WorldSituation, method: AllocationMethod): PageState {
-  const allocation = allocate(situation, COMBATANTS, { method, rng: createRng(situation.seed) });
-  return {
-    situation,
-    method,
-    allocation,
-    supply: fillBuckets(allocation),
-    lobs: [],
-    endstat: computeEndStat(situation, COMBATANTS, allocation, []),
-  };
-}
+let state: GameState = newGame(DEFAULT_WORLD_SITUATION);
+let actions: Action[] = [];
+const listeners = new Set<(s: GameState) => void>();
 
-let state = compute(DEFAULT_WORLD_SITUATION, DEFAULT_WORLD_SITUATION.allocationMethod);
-/** The game's dice for everything after allocation: MIRV scatter, for now. */
-let rng: Rng = createRng(state.situation.seed + 1);
-const listeners = new Set<(s: PageState) => void>();
-
-export function getState(): PageState {
+export function getState(): GameState {
   return state;
 }
 
-function publish(): void {
-  for (const fn of listeners) fn(state);
+/** Every action applied so far: with the World Situation, the whole game. */
+export function getActionLog(): readonly Action[] {
+  return actions;
 }
 
-export function setMethod(method: AllocationMethod): void {
-  state = compute(state.situation, method);
-  rng = createRng(state.situation.seed + 1);
-  publish();
+export function dispatch(action: Action): Outcome {
+  const outcome = apply(state, action);
+  if (outcome.state !== state) {
+    state = outcome.state;
+    actions = action.type === 'setMethod' && outcome.ok ? [action] : [...actions, action];
+    for (const fn of listeners) fn(state);
+  }
+  return outcome;
+}
+
+export function setMethod(method: AllocationMethod): Outcome {
+  return dispatch({ type: 'setMethod', method });
 }
 
 export type LaunchOutcome =
   | { readonly ok: true; readonly result: LobResult }
+  | { readonly ok: true; readonly pending: number }
   | { readonly ok: false; readonly problems: readonly string[] };
 
-/** Take the warheads out of the bucket and lob them. */
+/** Declare a launch order to the game-master. */
 export function launch(order: LaunchOrder): LaunchOutcome {
-  const inBucket = state.supply.buckets[order.combatant] ?? 0;
-  const problems = validateLaunch(
-    order,
-    state.situation,
-    COMBATANTS,
-    inBucket,
-    state.endstat.destroyedPlatforms,
-  );
-  if (problems.length > 0) return { ok: false, problems };
-  const result = resolveLob(order, state.situation, rng, endstatKillRadius(state.situation));
-  const lobs = [...state.lobs, result];
-  state = {
-    ...state,
-    supply: takeFromBucket(state.supply, order.combatant, order.warheads),
-    lobs,
-    endstat: computeEndStat(state.situation, COMBATANTS, state.allocation, lobs),
-  };
-  publish();
-  return { ok: true, result };
+  const o = dispatch({ type: 'launch', order });
+  if (!o.ok) return { ok: false, problems: o.problems };
+  if (o.pending !== undefined) return { ok: true, pending: o.pending };
+  if (o.lob) return { ok: true, result: o.lob };
+  return { ok: false, problems: ['The order went nowhere'] };
 }
 
-export function onStateChange(fn: (s: PageState) => void): () => void {
+export function onStateChange(fn: (s: GameState) => void): () => void {
   listeners.add(fn);
   return () => listeners.delete(fn);
+}
+
+/** Start again from a fresh game (tests and the practice button use this). */
+export function resetGame(): void {
+  state = newGame(DEFAULT_WORLD_SITUATION);
+  actions = [];
+  for (const fn of listeners) fn(state);
 }

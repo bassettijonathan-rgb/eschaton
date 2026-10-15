@@ -18,7 +18,6 @@ export const METER_PERIOD = 1.6;
 export interface LobPanelHooks {
   onAimingChange(aiming: boolean): void;
   onPreview(from: CourtPoint | undefined, to: CourtPoint | undefined): void;
-  onLaunch(result: LobResult): void;
   isFlying(): boolean;
 }
 
@@ -254,10 +253,13 @@ export function mountLobPanel(host: HTMLElement, hooks: LobPanelHooks): LobPanel
       problems.textContent = outcome.problems.join('. ') + '.';
       return;
     }
+    if ('pending' in outcome) {
+      problems.textContent = `${describeTiming(timing)} Declared to the game-master; God will rule.`;
+      return;
+    }
     problems.textContent = describeTiming(timing);
     swing.disabled = true;
     result.hidden = true;
-    hooks.onLaunch(outcome.result);
   };
 
   swing.addEventListener('click', () => {
