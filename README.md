@@ -10,8 +10,9 @@ laid on the courts are cities, airfields, command sites and submarines. The
 game-master wears the beanie and runs EndStat, and the map is not the territory.
 
 This repository is being built milestone by milestone (M0 through M9). So far the
-page draws the four courts and shows the game-master's megatonnage allocation;
-the rules data and the allocation formula are in the engine.
+page draws the four courts with the world on them, every target garment, the
+players, their buckets and Lord's cart; clicking a garment names what it is on
+the map, and the game-master's allocation table shows each Combatant's warheads.
 
 ## Running it
 
@@ -57,3 +58,6 @@ CI (`.github/workflows/ci.yml`) runs all of these on every pull request.
 The game follows the "Interdependence Day" chapter of _Infinite Jest_ and its
 endnotes 121 to 130. All in-game text is written for this project; no passages
 of the novel are reproduced here.
+
+Map data: [Natural Earth](https://www.naturalearthdata.com/) (public domain), via
+[world-atlas](https://github.com/topojson/world-atlas).

@@ -115,3 +115,91 @@ body {
   font-family: ui-monospace, Menlo, Consolas, monospace;
   font-size: 0.75rem;
 }
+
+.masthead .viewer-pick {
+  display: block;
+  margin-top: 6px;
+  font-size: 0.85rem;
+  pointer-events: auto;
+}
+
+.masthead select {
+  font: inherit;
+}
+
+.legend-panel {
+  left: auto;
+  right: 16px;
+  border-left-color: var(--eta-red);
+}
+
+.legend-panel h2 {
+  font-size: 0.9rem;
+  margin: 10px 0 4px;
+}
+
+.legend-panel ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.legend-panel li {
+  margin: 4px 0;
+}
+
+.legend-flag {
+  margin: 2px 0 0 22px;
+  color: var(--eta-red);
+  font-size: 0.8rem;
+}
+
+.swatch {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-right: 8px;
+  vertical-align: -2px;
+  border: 1px solid rgba(29, 35, 38, 0.4);
+}
+
+.inspector {
+  position: fixed;
+  top: 12px;
+  right: 16px;
+  width: min(22rem, calc(100vw - 32px));
+  padding: 10px 14px;
+  background: rgba(244, 241, 232, 0.96);
+  border-left: 4px solid #e0b000;
+  font-size: 0.85rem;
+}
+
+.inspector h2 {
+  margin: 0 24px 6px 0;
+  font-size: 1.05rem;
+}
+
+.inspector ul {
+  margin: 0;
+  padding-left: 1.1em;
+}
+
+.inspector .close {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  border: 0;
+  background: none;
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+@media (max-width: 700px) {
+  .inspector {
+    top: auto;
+    bottom: 64px;
+  }
+  .legend-panel {
+    bottom: 64px;
+  }
+}

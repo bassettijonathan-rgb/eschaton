@@ -14,7 +14,13 @@
     <header class="masthead">
       <h1>Eschaton</h1>
       <p>East Courts, Enfield Tennis Academy. <span id="court-list"></span></p>
-      <p>The courts are still bare: the map and the garments come next.</p>
+      <p>Click a garment to see what it is on the map. Drag to turn, scroll to zoom.</p>
+      <label class="viewer-pick"
+        >Viewing as
+        <select id="viewer">
+          <option value="gm">Game-master</option>
+        </select>
+      </label>
     </header>
     <script type="module" src="/src/main.ts"></script>
   </body>
