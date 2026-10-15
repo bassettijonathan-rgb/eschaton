@@ -32,7 +32,7 @@ const find = (name: string) => {
 const PLATFORM: Partial<Record<CombatantId, string>> = {
   AMNAT: 'Minot missile field',
   SOVWAR: 'Dombarovsky silos',
-  REDCHI: 'Delingha missile field',
+  REDCHI: 'Delingha missile base',
 };
 
 function aimed(by: CombatantId, target: string, warheads = 1): LaunchOrder {

@@ -30,6 +30,12 @@ Crisis, black for nothing at all) and runs the clock to the siren. Switch who is
 viewing and a hand-off screen hides the last player's secrets. Human God mode
 lets a person make the rulings instead.
 
+The map is not the territory. A ball that strikes a player, a racquet, a bucket
+or Lord's cart stops there and scores nothing. Snow or rain on the courts is drawn
+but never reaches EndStat, however hard a Combatant appeals. Only submarines and
+carrier groups ever move, at sea and within their range, and anything else stays
+where the map puts it.
+
 ## Running it
 
 You need Node 22 or later.

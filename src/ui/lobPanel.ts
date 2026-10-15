@@ -3,6 +3,7 @@
  * elevation, topspin and pace, then swings against the timing meter.
  */
 import { COMBATANTS } from '../engine/data/combatants';
+import { itemsOf } from '../engine/game';
 import { platformsFor, solveSpeed, type LobResult, type Platform } from '../engine/lob';
 import { greatCircleKm, project, unproject, type CourtPoint } from '../engine/projection';
 import { territoryAt } from '../engine/territory';
@@ -130,7 +131,7 @@ export function mountLobPanel(host: HTMLElement, hooks: LobPanelHooks): LobPanel
   };
   const platforms = (): Platform[] => {
     const id = combatant();
-    return id ? platformsFor(id, getState().situation) : [];
+    return id ? platformsFor(id, getState().situation, itemsOf(getState())) : [];
   };
   const currentPlatform = (): Platform | undefined =>
     platforms().find((p) => p.id === platform.value);
