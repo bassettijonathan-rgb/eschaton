@@ -314,6 +314,8 @@ body {
 .yushityu-panel {
   left: 270px;
   width: min(30rem, calc(100vw - 290px));
+  max-height: 45vh;
+  overflow-y: auto;
   border-left-color: #5fd38d;
 }
 
