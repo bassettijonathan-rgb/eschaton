@@ -36,9 +36,9 @@ export const DEFAULT_WORLD_SITUATION: WorldSituation = {
   },
   weather: {
     6: { windToward: 80, windKmh: 25, precipitation: 'none', cloud: 0.3 },
-    7: { windToward: 70, windKmh: 30, precipitation: 'rain', cloud: 0.7 },
+    7: { windToward: 70, windKmh: 30, precipitation: 'none', cloud: 0.6 },
     8: { windToward: 90, windKmh: 20, precipitation: 'none', cloud: 0.4 },
-    9: { windToward: 100, windKmh: 15, precipitation: 'none', cloud: 0.2 },
+    9: { windToward: 100, windKmh: 15, precipitation: 'rain', cloud: 0.8 },
   },
   allocationMethod: 'meanValue',
   howitzerAt: { lon: -82.95, lat: 42.31 },

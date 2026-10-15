@@ -99,6 +99,12 @@ export class FlightPlayer {
     this.group.add(this.marks);
   }
 
+  /** Wipe the courts: burn marks and trails go, as when a new game starts. */
+  reset(): void {
+    this.clearSegments();
+    this.marks.clear();
+  }
+
   busy(): boolean {
     return this.segments.length > 0;
   }

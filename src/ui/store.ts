@@ -6,6 +6,8 @@ import { allocate, type Allocation } from '../engine/allocation';
 import { fillBuckets, takeFromBucket, type BallSupply } from '../engine/buckets';
 import { COMBATANTS } from '../engine/data/combatants';
 import { DEFAULT_WORLD_SITUATION } from '../engine/data/worldSituation';
+import { endstatKillRadius } from '../engine/effects';
+import { computeEndStat, type EndStatReport } from '../engine/endstat';
 import { resolveLob, validateLaunch, type LaunchOrder, type LobResult } from '../engine/lob';
 import { createRng, type Rng } from '../engine/rng';
 import type { AllocationMethod, WorldSituation } from '../engine/types';
@@ -17,11 +19,20 @@ export interface PageState {
   readonly supply: BallSupply;
   /** Every lob so far, oldest first. */
   readonly lobs: readonly LobResult[];
+  /** EndStat's running report on the lobs so far. */
+  readonly endstat: EndStatReport;
 }
 
 function compute(situation: WorldSituation, method: AllocationMethod): PageState {
   const allocation = allocate(situation, COMBATANTS, { method, rng: createRng(situation.seed) });
-  return { situation, method, allocation, supply: fillBuckets(allocation), lobs: [] };
+  return {
+    situation,
+    method,
+    allocation,
+    supply: fillBuckets(allocation),
+    lobs: [],
+    endstat: computeEndStat(situation, COMBATANTS, allocation, []),
+  };
 }
 
 let state = compute(DEFAULT_WORLD_SITUATION, DEFAULT_WORLD_SITUATION.allocationMethod);
@@ -50,13 +61,21 @@ export type LaunchOutcome =
 /** Take the warheads out of the bucket and lob them. */
 export function launch(order: LaunchOrder): LaunchOutcome {
   const inBucket = state.supply.buckets[order.combatant] ?? 0;
-  const problems = validateLaunch(order, state.situation, COMBATANTS, inBucket);
+  const problems = validateLaunch(
+    order,
+    state.situation,
+    COMBATANTS,
+    inBucket,
+    state.endstat.destroyedPlatforms,
+  );
   if (problems.length > 0) return { ok: false, problems };
-  const result = resolveLob(order, state.situation, rng);
+  const result = resolveLob(order, state.situation, rng, endstatKillRadius(state.situation));
+  const lobs = [...state.lobs, result];
   state = {
     ...state,
     supply: takeFromBucket(state.supply, order.combatant, order.warheads),
-    lobs: [...state.lobs, result],
+    lobs,
+    endstat: computeEndStat(state.situation, COMBATANTS, state.allocation, lobs),
   };
   publish();
   return { ok: true, result };

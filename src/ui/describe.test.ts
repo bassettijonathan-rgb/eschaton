@@ -7,7 +7,16 @@ import { TARGETS } from '../engine/data/targets';
 import { DEFAULT_WORLD_SITUATION } from '../engine/data/worldSituation';
 import { adjudicateImpact } from '../engine/lob';
 import { project } from '../engine/projection';
-import { describeApparatus, describeDetonation, describeTarget } from './describe';
+import { endstatKillRadius } from '../engine/effects';
+import { computeEndStat } from '../engine/endstat';
+import {
+  describeApparatus,
+  describeDamage,
+  describeDetonation,
+  describeStrike,
+  describeTarget,
+  formatRatio,
+} from './describe';
 import { METER_PERIOD, describeTiming, meterPosition } from './lobPanel';
 
 const supply = fillBuckets(allocate(DEFAULT_WORLD_SITUATION, COMBATANTS));
@@ -84,5 +93,25 @@ describe('what a warhead did', () => {
     expect(describeTiming(0.01)).toBe('Timing: sweet spot.');
     expect(describeTiming(-0.25)).toBe('Timing: 25% early.');
     expect(describeTiming(0.6)).toBe('Timing: 60% late.');
+  });
+});
+
+describe('the strike log', () => {
+  it('says what a warhead hit and what it cost', () => {
+    const ws = DEFAULT_WORLD_SITUATION;
+    const report = computeEndStat(ws, COMBATANTS, allocate(ws, COMBATANTS), [
+      {
+        order: { combatant: 'AMNAT' },
+        detonations: [adjudicateImpact(project(find('Moscow').at), 1, endstatKillRadius(ws))],
+      },
+    ]);
+    const strike = report.strikes[0];
+    if (!strike) throw new Error('no strike');
+    expect(describeStrike(strike)).toMatch(
+      /^AMNAT, warhead 1: Moscow \(direct, firestorm\)\. [\d.]+ million dead\. SACPOP\.$/,
+    );
+    expect(describeDamage(find('Moscow'), report).join(' ')).toMatch(/firestorm has burned/);
+    expect(formatRatio({ ratio: Infinity })).toBe('∞');
+    expect(formatRatio({ ratio: undefined })).toBe('—');
   });
 });

@@ -3,26 +3,39 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { layoutApparatus } from './engine/apparatus';
 import { COMBATANTS } from './engine/data/combatants';
 import { TARGETS } from './engine/data/targets';
+import { platformsFor, solveSpeed } from './engine/lob';
+import { project } from './engine/projection';
 import { COURTS } from './engine/theater';
 import { COMBATANT_IDS, type CombatantId } from './engine/types';
 import { buildApparatus, buildPavilion } from './render/apparatus';
 import { AimPreview, FlightPlayer } from './render/flight';
+import { PlumeLayer } from './render/plumes';
 import { buildGarments, type PickTag } from './render/garments';
 import { buildMapMesh } from './render/mapTexture';
 import { buildTheaterScene } from './render/theaterScene';
 import { mountAllocationPanel } from './ui/allocationPanel';
-import { describeApparatus, describeTarget } from './ui/describe';
+import { describeApparatus, describeDamage, describeTarget } from './ui/describe';
 import { mountInspector } from './ui/inspector';
 import { mountLegendPanel } from './ui/legendPanel';
-import { mountLobPanel } from './ui/lobPanel';
-import { getState } from './ui/store';
+import { mountLobPanel, type LobPanelHooks } from './ui/lobPanel';
+import { getState, launch, onStateChange } from './ui/store';
 import { getViewer, setViewer } from './ui/viewer';
+import { mountYushityu } from './ui/yushityu';
 import './style.css';
 
 declare global {
   interface Window {
     /** Test hooks: where an object named on the courts appears on screen. */
-    eschaton?: { screenPosition(name: string): { x: number; y: number } | null };
+    eschaton?: {
+      screenPosition(name: string): { x: number; y: number } | null;
+      /** A perfectly timed lob from a platform at a target, by name: for tests and demonstrations. */
+      perfectLob(
+        combatant: CombatantId,
+        platform: string,
+        target: string,
+        warheads?: number,
+      ): string[];
+    };
   }
 }
 
@@ -75,6 +88,8 @@ function start(container: HTMLElement): void {
   scene.add(flights.group);
   const aimPreview = new AimPreview();
   scene.add(aimPreview.group);
+  const plumes = new PlumeLayer();
+  scene.add(plumes.group);
 
   const camera = new THREE.PerspectiveCamera(40, 1, 0.05, 600);
   camera.position.set(0, 70, 55);
@@ -107,7 +122,7 @@ function start(container: HTMLElement): void {
   marker.visible = false;
   marker.renderOrder = 10;
   scene.add(marker);
-  const lobPanel = mountLobPanel(document.body, {
+  const lobHooks: LobPanelHooks = {
     onAimingChange(on) {
       renderer.domElement.style.cursor = on ? 'crosshair' : '';
     },
@@ -118,11 +133,20 @@ function start(container: HTMLElement): void {
       document.body.dataset['flying'] = 'true';
       flights.play(result, performance.now() / 1000, undefined, () => {
         lobPanel.showResult(result);
+        plumes.update(getState().endstat);
+        showSelected();
         document.body.dataset['flying'] = 'false';
         document.body.dataset['lobs'] = String(getState().lobs.length);
       });
     },
     isFlying: () => flights.busy(),
+  };
+  const lobPanel = mountLobPanel(document.body, lobHooks);
+  onStateChange((s) => {
+    if (s.lobs.length > 0) return;
+    // A new allocation starts the game over.
+    flights.reset();
+    plumes.update(s.endstat);
   });
   const courtPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   let down: { x: number; y: number } | null = null;
@@ -132,7 +156,10 @@ function start(container: HTMLElement): void {
     if (!selected) return;
     if (selected.kind === 'target') {
       const item = TARGETS.find((t) => t.id === selected?.id);
-      if (item) inspector.show(describeTarget(item));
+      if (item) {
+        const d = describeTarget(item);
+        inspector.show({ ...d, lines: [...d.lines, ...describeDamage(item, getState().endstat)] });
+      }
     } else {
       const a = layout.find((x) => x.id === selected?.id);
       if (a) inspector.show(describeApparatus(a, getViewer(), getState().supply));
@@ -200,6 +227,33 @@ function start(container: HTMLElement): void {
   }
 
   window.eschaton = {
+    perfectLob(combatant, platformName, targetName, warheads = 1) {
+      const platform = platformsFor(combatant, getState().situation).find(
+        (p) => p.name === platformName,
+      );
+      const target = TARGETS.find((t) => t.name === targetName);
+      if (!platform || !target) return [`no platform ${platformName} or target ${targetName}`];
+      const elevation = (55 * Math.PI) / 180;
+      const topspinRpm = warheads > 1 ? 0 : 1500;
+      const aim = solveSpeed(
+        project(platform.at),
+        project(target.at),
+        elevation,
+        topspinRpm,
+        warheads,
+      );
+      if (!aim) return ['out of reach'];
+      const outcome = launch({
+        combatant,
+        platformId: platform.id,
+        warheads,
+        swing: { bearing: aim.bearing, elevation, speed: aim.speed, topspinRpm, timing: 0 },
+        aimAt: target.at,
+      });
+      if (!outcome.ok) return [...outcome.problems];
+      lobHooks.onLaunch(outcome.result);
+      return [];
+    },
     screenPosition(name) {
       const obj = scene.getObjectByName(name);
       if (!obj) return null;
@@ -233,4 +287,5 @@ start(container);
 const legend = document.getElementById('court-list');
 if (legend) legend.textContent = COURTS.map((c) => `Court ${String(c.number)}`).join(' · ');
 mountAllocationPanel(document.body);
+mountYushityu(document.body);
 mountLegendPanel(document.body);

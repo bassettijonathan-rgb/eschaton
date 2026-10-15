@@ -188,8 +188,16 @@ export function mountLobPanel(host: HTMLElement, hooks: LobPanelHooks): LobPanel
     }
     const list = platforms();
     const keep = platform.value;
+    const struck = getState().endstat.destroyedPlatforms;
+    const usable = list.filter((p) => !struck.includes(p.id));
+    const pick = usable.some((p) => p.id === keep) ? keep : usable[0]?.id;
     platform.replaceChildren(
-      ...list.map((p) => el('option', { value: p.id, selected: p.id === keep }, [p.name])),
+      ...list.map((p) => {
+        const out = struck.includes(p.id);
+        return el('option', { value: p.id, selected: p.id === pick, disabled: out }, [
+          out ? `${p.name} (struck)` : p.name,
+        ]);
+      }),
     );
     const inBucket = getState().supply.buckets[id] ?? 0;
     warheads.max = String(Math.max(1, Math.min(COMBATANTS[id].mirvCap, inBucket)));

@@ -95,6 +95,12 @@ describe('launch order validation', () => {
     expect(problems.join()).toMatch(/no launch platform/);
   });
 
+  it('refuses to launch from a platform EndStat has counted as destroyed', () => {
+    expect(validateLaunch(order({ swing }), ws, COMBATANTS, 10, [MINOT.id]).join()).toMatch(
+      /can no longer launch/,
+    );
+  });
+
   it('caps the warheads in one jockstrap at the Combatant’s MIRV limit', () => {
     expect(validateLaunch(order({ warheads: 8, swing }), ws, COMBATANTS, 20)).toEqual([]);
     expect(validateLaunch(order({ warheads: 9, swing }), ws, COMBATANTS, 20).join()).toMatch(
