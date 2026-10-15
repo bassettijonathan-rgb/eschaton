@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { COURTS } from './engine/theater';
 import { buildTheaterScene } from './render/theaterScene';
+import { mountAllocationPanel } from './ui/allocationPanel';
 import './style.css';
 
 function webglAvailable(): boolean {
@@ -65,3 +66,5 @@ start(container);
 
 const legend = document.getElementById('court-list');
 if (legend) legend.textContent = COURTS.map((c) => `Court ${String(c.number)}`).join(' · ');
+
+mountAllocationPanel(document.body);

@@ -9,8 +9,9 @@ launched only by racquet. Shirts, towels, shorts, armbands, socks and sneakers
 laid on the courts are cities, airfields, command sites and submarines. The
 game-master wears the beanie and runs EndStat, and the map is not the territory.
 
-This repository is being built milestone by milestone (M0 through M9). At M0 it
-is a scaffold: the page draws four empty courts and CI checks everything.
+This repository is being built milestone by milestone (M0 through M9). So far the
+page draws the four courts and shows the game-master's megatonnage allocation;
+the rules data and the allocation formula are in the engine.
 
 ## Running it
 
@@ -46,9 +47,10 @@ CI (`.github/workflows/ci.yml`) runs all of these on every pull request.
 | ------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
 | `src/engine/` | The rules core: pure, deterministic and seeded. No DOM, no Three.js, no `Math.random`, no wall clock (lint enforces this). Unit-tested. |
 | `src/render/` | Three.js scene building: courts, and later the map, garments, players and the lob.                                                      |
+| `src/ui/`     | Page panels, such as the game-master's allocation table.                                                                                |
 | `src/main.ts` | Page entry point.                                                                                                                       |
 | `e2e/`        | Playwright browser tests.                                                                                                               |
-| `docs/`       | Design notes, including `FIDELITY.md` (from M1): every reading of the novel the game makes.                                             |
+| `docs/`       | `FIDELITY.md`: every reading of the novel the game makes, and why.                                                                      |
 
 ## Source
 

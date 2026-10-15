@@ -6,6 +6,12 @@ export default defineConfig({
   build: {
     target: 'es2022',
     sourcemap: true,
+    rollupOptions: {
+      output: {
+        // Three.js changes rarely; keep it in its own cacheable chunk.
+        manualChunks: { three: ['three'] },
+      },
+    },
   },
   test: {
     include: ['src/**/*.test.ts'],

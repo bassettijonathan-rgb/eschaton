@@ -55,3 +55,63 @@ body {
   font-size: 0.9rem;
   color: var(--eta-gray);
 }
+
+.panel {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  max-width: min(30rem, calc(100vw - 32px));
+  max-height: 60vh;
+  overflow: auto;
+  padding: 8px 12px;
+  background: rgba(244, 241, 232, 0.95);
+  border-left: 4px solid var(--eta-gray);
+  font-size: 0.85rem;
+}
+
+.panel summary {
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.panel-note {
+  margin: 6px 0;
+  color: var(--eta-gray);
+}
+
+.panel select {
+  font: inherit;
+  max-width: 100%;
+}
+
+.allocation-table table {
+  width: 100%;
+  margin-top: 8px;
+  border-collapse: collapse;
+}
+
+.allocation-table caption {
+  text-align: left;
+  color: var(--eta-gray);
+  padding-bottom: 4px;
+}
+
+.allocation-table th,
+.allocation-table td {
+  padding: 3px 6px;
+  border-bottom: 1px solid rgba(29, 35, 38, 0.15);
+  text-align: left;
+  vertical-align: top;
+}
+
+.allocation-table .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.allocation-table ol {
+  margin: 4px 0;
+  padding-left: 1.2em;
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 0.75rem;
+}
