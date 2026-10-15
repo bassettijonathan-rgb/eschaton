@@ -4,17 +4,18 @@ import { layoutApparatus } from './engine/apparatus';
 import { COMBATANTS } from './engine/data/combatants';
 import { TARGETS } from './engine/data/targets';
 import type { Viewer } from './engine/buckets';
-import type { Action } from './engine/game';
+import { itemsOf, type Action } from './engine/game';
 import { platformsFor, solveSpeed, type LobResult } from './engine/lob';
-import { project } from './engine/projection';
+import { project, unproject } from './engine/projection';
 import { COURTS } from './engine/theater';
-import { COMBATANT_IDS, type CombatantId } from './engine/types';
+import { COMBATANT_IDS, type CombatantId, type LonLat } from './engine/types';
 import { BEANIE_COLOURS, buildApparatus, buildPavilion } from './render/apparatus';
 import { AimPreview, FlightPlayer } from './render/flight';
 import { PlumeLayer } from './render/plumes';
 import { buildGarments, type PickTag } from './render/garments';
 import { buildMapMesh } from './render/mapTexture';
-import { buildTheaterScene } from './render/theaterScene';
+import { buildTheaterScene, toWorld } from './render/theaterScene';
+import { CourtWeather } from './render/weather';
 import { mountAllocationPanel } from './ui/allocationPanel';
 import { describeApparatus, describeDamage, describeTarget } from './ui/describe';
 import { mountInspector } from './ui/inspector';
@@ -62,6 +63,9 @@ function findPickTag(object: THREE.Object3D | null): PickTag | undefined {
   return undefined;
 }
 
+/** Ask the person at the screen to click a spot on the courts; set once the courts are drawn. */
+let pickPoint: () => Promise<LonLat | undefined> = () => Promise.resolve(undefined);
+
 function start(container: HTMLElement): void {
   if (!webglAvailable()) {
     container.textContent =
@@ -96,6 +100,8 @@ function start(container: HTMLElement): void {
   scene.add(aimPreview.group);
   const plumes = new PlumeLayer();
   scene.add(plumes.group);
+  const weather = new CourtWeather();
+  scene.add(weather.group);
 
   const camera = new THREE.PerspectiveCamera(40, 1, 0.05, 600);
   camera.position.set(0, 70, 55);
@@ -165,8 +171,25 @@ function start(container: HTMLElement): void {
     document.body.dataset['beanie'] = getState().beanie;
   };
   showBeanie();
+  // Snow and rain on the courts are drawn, and that is all they are.
+  const showWeather = (): void => {
+    weather.set(getState().courtWeather);
+    document.body.dataset['courtWeather'] = getState().courtWeather;
+  };
+  showWeather();
+  // Submarines and carrier groups lie where their owners last moved them.
+  const placeShips = (): void => {
+    for (const item of itemsOf(getState())) {
+      if (!item.mobile) continue;
+      const obj = garments.getObjectByName(`target-${item.id}`);
+      const { x, y } = project(item.at);
+      obj?.position.copy(toWorld(x, y, 0.003));
+    }
+  };
   onStateChange((s) => {
     showBeanie();
+    showWeather();
+    placeShips();
     if (s.lobs.length < played) {
       // A new game: clear the courts.
       played = 0;
@@ -183,6 +206,20 @@ function start(container: HTMLElement): void {
   const courtPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
   let down: { x: number; y: number } | null = null;
   let selected: PickTag | undefined;
+  let picking: ((p: LonLat | undefined) => void) | undefined;
+  pickPoint = () => {
+    picking?.(undefined);
+    renderer.domElement.style.cursor = 'crosshair';
+    document.body.dataset['picking'] = 'true';
+    return new Promise((resolve) => {
+      picking = (p) => {
+        picking = undefined;
+        renderer.domElement.style.cursor = '';
+        document.body.dataset['picking'] = 'false';
+        resolve(p);
+      };
+    });
+  };
 
   const showSelected = (): void => {
     if (!selected) return;
@@ -214,6 +251,11 @@ function start(container: HTMLElement): void {
       -((e.clientY - rect.top) / rect.height) * 2 + 1,
     );
     raycaster.setFromCamera(ndc, camera);
+    if (picking) {
+      const p = raycaster.ray.intersectPlane(courtPlane, new THREE.Vector3());
+      picking(p ? unproject({ x: p.x, y: -p.z }) : undefined);
+      return;
+    }
     if (lobPanel.aiming()) {
       const p = raycaster.ray.intersectPlane(courtPlane, new THREE.Vector3());
       if (p) lobPanel.setAim({ x: p.x, y: -p.z });
@@ -234,6 +276,7 @@ function start(container: HTMLElement): void {
   });
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
+      picking?.(undefined);
       selected = undefined;
       marker.visible = false;
       inspector.clear();
@@ -277,7 +320,7 @@ function start(container: HTMLElement): void {
       return o.ok ? [] : [...o.problems];
     },
     perfectLob(combatant, platformName, targetName, warheads = 1) {
-      const platform = platformsFor(combatant, getState().situation).find(
+      const platform = platformsFor(combatant, getState().situation, itemsOf(getState())).find(
         (p) => p.name === platformName,
       );
       const target = TARGETS.find((t) => t.name === targetName);
@@ -319,6 +362,7 @@ function start(container: HTMLElement): void {
   renderer.setAnimationLoop(() => {
     controls.update();
     flights.update(performance.now() / 1000);
+    weather.update(performance.now() / 1000);
     renderer.render(scene, camera);
   });
 
@@ -335,5 +379,5 @@ const legend = document.getElementById('court-list');
 if (legend) legend.textContent = COURTS.map((c) => `Court ${String(c.number)}`).join(' · ');
 mountAllocationPanel(document.body);
 const yushityu = mountYushityu(document.body);
-mountGamePanel(document.body, { crunch: yushityu.crunch });
+mountGamePanel(document.body, { crunch: yushityu.crunch, pickPoint: () => pickPoint() });
 mountLegendPanel(document.body);

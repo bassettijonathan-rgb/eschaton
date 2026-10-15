@@ -5,7 +5,9 @@ import { GAME_MASTER, fillBuckets } from '../engine/buckets';
 import { COMBATANTS } from '../engine/data/combatants';
 import { TARGETS } from '../engine/data/targets';
 import { DEFAULT_WORLD_SITUATION } from '../engine/data/worldSituation';
-import { adjudicateImpact } from '../engine/lob';
+import { apparatusSolids } from '../engine/axiom';
+import { adjudicateImpact, apparatusDetonation } from '../engine/lob';
+import { vec } from '../engine/physics';
 import { project } from '../engine/projection';
 import { endstatKillRadius } from '../engine/effects';
 import { computeEndStat } from '../engine/endstat';
@@ -83,6 +85,22 @@ describe('what a warhead did', () => {
   it('says a warhead off the theater does nothing', () => {
     expect(describeDetonation(adjudicateImpact({ x: 0, y: 40 }, 3))).toBe(
       'Warhead 3 came down off the map, where it does nothing.',
+    );
+  });
+
+  it('says a ball that struck the apparatus did nothing, and why', () => {
+    const bucket = apparatusSolids(layoutApparatus(DEFAULT_WORLD_SITUATION, COMBATANTS)).find(
+      (x) => x.id === 'sovwar-bucket',
+    );
+    if (!bucket) throw new Error('no bucket');
+    const d = apparatusDetonation(1, bucket, vec(bucket.x, bucket.y, 0.2));
+    expect(describeDetonation(d)).toBe(
+      "Warhead 1 struck SOVWAR's bucket. The apparatus is not the territory: off the map, and nothing scores.",
+    );
+    const moscow = TARGETS.find((t) => t.name === 'Moscow');
+    if (!moscow) throw new Error('no Moscow');
+    expect(describeTarget(moscow).lines).toContain(
+      'Fixed to the map: moving it would be tampering with the map, not a move in the game.',
     );
   });
 

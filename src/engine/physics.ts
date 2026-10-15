@@ -88,6 +88,8 @@ export interface Flight {
   readonly end: FlightState;
   readonly duration: number;
   readonly landed: boolean;
+  /** Stopped by something standing on the court before it reached the court. */
+  readonly obstructed: boolean;
 }
 
 export interface SimulateOptions {
@@ -98,6 +100,11 @@ export interface SimulateOptions {
   /** Stop at the top of the arc instead of at the court. */
   readonly stopAtApex?: boolean;
   readonly maxTime?: number;
+  /**
+   * Something standing on the court: given one step of the flight, the
+   * fraction of the step at which the ball first touches it, if it does.
+   */
+  readonly obstacle?: (from: Vec3, to: Vec3) => number | undefined;
 }
 
 function rk4(body: Body, s: FlightState, dt: number): FlightState {
@@ -133,14 +140,20 @@ export function simulate(body: Body, start: FlightState, options: SimulateOption
       const f = s.velocity.z / (s.velocity.z - next.velocity.z);
       const end = lerpState(s, next, f);
       samples.push({ t: t + f * dt, position: end.position });
-      return { samples, end, duration: t + f * dt, landed: false };
+      return { samples, end, duration: t + f * dt, landed: false, obstructed: false };
+    }
+    const blocked = options.obstacle?.(s.position, next.position);
+    if (blocked !== undefined) {
+      const end = lerpState(s, next, blocked);
+      samples.push({ t: t + blocked * dt, position: end.position });
+      return { samples, end, duration: t + blocked * dt, landed: false, obstructed: true };
     }
     if (next.position.z <= 0 && t > 0) {
       const f = s.position.z / (s.position.z - next.position.z);
       const end = lerpState(s, next, f);
       const contact = { ...end, position: vec(end.position.x, end.position.y, 0) };
       samples.push({ t: t + f * dt, position: contact.position });
-      return { samples, end: contact, duration: t + f * dt, landed: true };
+      return { samples, end: contact, duration: t + f * dt, landed: true, obstructed: false };
     }
     s = next;
     t += dt;
@@ -149,7 +162,7 @@ export function simulate(body: Body, start: FlightState, options: SimulateOption
       nextSample += sampleEvery;
     }
   }
-  return { samples, end: s, duration: t, landed: false };
+  return { samples, end: s, duration: t, landed: false, obstructed: false };
 }
 
 function lerpState(a: FlightState, b: FlightState, f: number): FlightState {

@@ -15,7 +15,8 @@ interface Segment {
   /** The warhead this segment carries to the court, if it ends in one. */
   readonly detonation: Detonation | undefined;
   /** It ends with the jockstrap opening, or with a shell that does nothing. */
-  readonly ending: 'detonate' | 'open' | 'dud';
+  /** thud: it struck the apparatus, which is not the map, and did nothing. */
+  readonly ending: 'detonate' | 'open' | 'dud' | 'thud';
   done: boolean;
 }
 
@@ -121,14 +122,24 @@ export class FlightPlayer {
     this.onDone = onDone;
     const byWarhead = new Map(result.detonations.map((d) => [d.warhead, d]));
     const mirv = result.order.warheads > 1;
-    if (mirv) this.addSegment(result.launch, 0, undefined, 'open', 0xd8d4c8, BALL_RADIUS * 2.2);
+    if (mirv) {
+      const stopped = result.warheadFlights.length === 0 && result.detonations[0]?.struck;
+      this.addSegment(
+        result.launch,
+        0,
+        undefined,
+        stopped ? 'thud' : 'open',
+        0xd8d4c8,
+        BALL_RADIUS * 2.2,
+      );
+    }
     result.warheadFlights.forEach((f, i) => {
       const d = byWarhead.get(i + 1);
       this.addSegment(
         f,
         mirv ? result.launch.duration : 0,
         d,
-        d ? 'detonate' : 'dud',
+        d?.struck ? 'thud' : d ? 'detonate' : 'dud',
         0xd7e04a,
         BALL_RADIUS,
       );
@@ -169,6 +180,7 @@ export class FlightPlayer {
           this.burn(s.detonation);
           this.onDetonate?.(s.detonation);
         } else if (s.ending === 'dud') this.flash(end, now, 0x9a9a9a);
+        else if (s.ending === 'thud') this.flash(end, now, 0xf4f1e8, end.z);
       }
     }
     for (const f of this.flashes) {
@@ -193,12 +205,12 @@ export class FlightPlayer {
     }
   }
 
-  private flash(at: { x: number; y: number }, now: number, color: number): void {
+  private flash(at: { x: number; y: number }, now: number, color: number, height = 0): void {
     const mesh = new THREE.Mesh(
       new THREE.SphereGeometry(1, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2),
       new THREE.MeshBasicMaterial({ color, transparent: true, depthWrite: false }),
     );
-    mesh.position.copy(toWorld(at.x, at.y, 0));
+    mesh.position.copy(toWorld(at.x, at.y, height));
     mesh.scale.setScalar(0.05);
     this.group.add(mesh);
     this.flashes.push({ mesh, start: now });

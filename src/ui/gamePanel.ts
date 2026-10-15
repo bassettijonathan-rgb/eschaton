@@ -6,7 +6,7 @@
  * game-master changes beanies, runs the clock and, as Human God, rules.
  */
 import { COMBATANTS } from '../engine/data/combatants';
-import { TARGETS } from '../engine/data/targets';
+import { MOBILE_RANGE_KM, TARGETS } from '../engine/data/targets';
 import { TRIGSIT_PRECEDENTS } from '../engine/data/trigsits';
 import {
   MAXIMUM_READINESS,
@@ -14,6 +14,7 @@ import {
   STARTING_DEFCON,
   canRead,
   clockLabel,
+  itemsOf,
   defconLabel,
   quorum,
   type Action,
@@ -25,7 +26,7 @@ import {
   type PendingRuling,
 } from '../engine/game';
 import { platformsFor } from '../engine/lob';
-import type { CombatantId } from '../engine/types';
+import type { CombatantId, LonLat, Precipitation } from '../engine/types';
 import { el } from './dom';
 import { dispatch, getState, onStateChange } from './store';
 import { getViewer, onViewerChange } from './viewer';
@@ -82,6 +83,8 @@ function select<T extends string | number>(
 export interface GamePanelOptions {
   /** Open EndStat's crunch on the Yushityu. */
   crunch(): void;
+  /** Ask the person at the screen to click a spot on the courts. */
+  pickPoint(): Promise<LonLat | undefined>;
 }
 
 export function mountGamePanel(host: HTMLElement, options: GamePanelOptions): void {
@@ -102,6 +105,7 @@ export function mountGamePanel(host: HTMLElement, options: GamePanelOptions): vo
   let messageTo: CombatantId | undefined;
   let draft = '';
   let trigsitPick = TRIGSIT_PRECEDENTS[0]?.id ?? '';
+  let shipPick: string | undefined;
   let cessationA: CombatantId | undefined;
   let cessationB: CombatantId | undefined;
 
@@ -371,6 +375,78 @@ export function mountGamePanel(host: HTMLElement, options: GamePanelOptions): vo
     ];
   };
 
+  const WEATHER_LABELS: Readonly<Record<Precipitation, string>> = {
+    none: 'Dry',
+    rain: 'Rain',
+    snow: 'Snow',
+  };
+
+  const courtWeather = (s: GameState): HTMLElement => {
+    const sel = select(
+      'court-weather',
+      (['none', 'rain', 'snow'] as const).map((w) => ({ value: w, label: WEATHER_LABELS[w] })),
+      s.courtWeather,
+    );
+    sel.addEventListener('change', () => {
+      act({ type: 'courtWeather', precipitation: sel.value as Precipitation });
+    });
+    return el('div', { className: 'game-row' }, [
+      el('label', { htmlFor: 'court-weather' }, ['Real weather on the courts ']),
+      sel,
+    ]);
+  };
+
+  const weatherAppeal = (s: GameState, me: CombatantId): HTMLElement[] =>
+    s.courtWeather === 'none'
+      ? []
+      : [
+          el('p', { className: 'panel-note' }, [
+            `${WEATHER_LABELS[s.courtWeather]} is falling on the courts. EndStat uses only the World Situation's weather.`,
+          ]),
+          button('Demand the kill radii be recalculated', 'weather-appeal', () => {
+            act({ type: 'weatherAppeal', by: me });
+          }),
+        ];
+
+  const ships = (s: GameState, me: CombatantId): HTMLElement[] => {
+    const mine = itemsOf(s).filter((t) => t.owner === me && t.mobile);
+    if (mine.length === 0) return [];
+    if (!shipPick || !mine.some((t) => t.id === shipPick)) shipPick = mine[0]?.id;
+    const sel = select(
+      'move-item',
+      mine.map((t) => ({ value: t.id, label: t.name })),
+      shipPick,
+    );
+    sel.addEventListener('change', () => {
+      shipPick = sel.value;
+    });
+    return [
+      el('h3', {}, ['Your ships']),
+      el('div', { className: 'game-row' }, [
+        el('label', { htmlFor: 'move-item' }, ['Move ']),
+        sel,
+        ' ',
+        button('Pick where it goes', 'move-pick', () => {
+          const item = shipPick;
+          if (!item) return;
+          feedback = 'Click a spot at sea on the map (Escape cancels).';
+          render();
+          void options.pickPoint().then((to) => {
+            if (!to) {
+              feedback = '';
+              render();
+              return;
+            }
+            act({ type: 'moveItem', by: me, item, to });
+          });
+        }),
+      ]),
+      el('p', { className: 'panel-note' }, [
+        `Submarines move up to ${String(MOBILE_RANGE_KM.submarine ?? 0)} km a move, carrier groups ${String(MOBILE_RANGE_KM['carrier-group'] ?? 0)} km, and only at sea. Nothing else on the map ever moves.`,
+      ]),
+    ];
+  };
+
   const humanGodToggle = (s: GameState): HTMLElement => {
     const box = el('input', { type: 'checkbox', id: 'human-god', checked: s.humanGod });
     box.addEventListener('change', () => {
@@ -575,7 +651,13 @@ export function mountGamePanel(host: HTMLElement, options: GamePanelOptions): vo
         break;
       case 'play':
         if (me) {
-          parts.push(defconControl(s, me), ...hotline(s, me), ...pactsSection(s, me));
+          parts.push(
+            defconControl(s, me),
+            ...weatherAppeal(s, me),
+            ...hotline(s, me),
+            ...ships(s, me),
+            ...pactsSection(s, me),
+          );
           parts.push(
             button(
               'Agree to end the game',
@@ -622,7 +704,7 @@ export function mountGamePanel(host: HTMLElement, options: GamePanelOptions): vo
         break;
     }
     if (isGm && s.phase !== 'ended') {
-      parts.push(humanGodToggle(s));
+      parts.push(courtWeather(s), humanGodToggle(s));
       if (s.phase !== 'play')
         parts.push(
           button('Practice: skip to play', 'skip-to-play', () => {

@@ -92,6 +92,16 @@ export const GARMENTS: Readonly<Record<GarmentKind, GarmentDef>> = {
   },
 };
 
+/**
+ * How far a mobile garment may move in one move, km: about twelve hours'
+ * steaming (a missile submarine at 20 knots, a carrier group at 25). Nothing
+ * else on the map moves (section 1.7).
+ */
+export const MOBILE_RANGE_KM: Readonly<Partial<Record<TargetType, number>>> = {
+  submarine: 450,
+  'carrier-group': 550,
+};
+
 export const TARGET_TYPE_LABELS: Readonly<Record<TargetType, string>> = {
   MAMA: 'MAMA (Major Metro Area)',
   airfield: 'Airfield',

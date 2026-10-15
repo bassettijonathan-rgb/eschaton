@@ -265,7 +265,11 @@ export function computeEndStat(
       const working: string[] = [];
       const head = `Order ${String(order)}, warhead ${String(d.warhead)} (${defs[striker].code})`;
       if (d.offMap) {
-        working.push(`${head}: came down off the map. No effect.`);
+        working.push(
+          d.struck
+            ? `${head}: struck ${d.struck.label} ${d.struck.height.toFixed(2)} m above the court. The apparatus of the game is not the territory: off the map, no effect, no points for hitting anybody real.`
+            : `${head}: came down off the map. No effect.`,
+        );
         audit.push(...working);
         strikes.push({
           order,

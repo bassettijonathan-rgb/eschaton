@@ -5,7 +5,7 @@ import type { ApparatusItem } from '../engine/apparatus';
 import { viewBucket, type BallSupply, type Viewer } from '../engine/buckets';
 import { COMBATANTS } from '../engine/data/combatants';
 import { pointValue } from '../engine/data/points';
-import { TARGETS, TARGET_TYPE_LABELS, garmentFor } from '../engine/data/targets';
+import { MOBILE_RANGE_KM, TARGETS, TARGET_TYPE_LABELS, garmentFor } from '../engine/data/targets';
 import { UNPLAYED_NATIONS } from '../engine/data/worldSituation';
 import type { EndStatReport, StrikeReport, Tally } from '../engine/endstat';
 import { HOWITZER_RANGE_KM, type Detonation, type LobResult } from '../engine/lob';
@@ -45,7 +45,12 @@ export function describeTarget(item: TargetItem): Description {
   );
   if (item.platform)
     lines.push(`Launch platform (${item.platform}): warheads can be lobbed from here.`);
-  if (item.mobile) lines.push('Mobile: the scenario may move it.');
+  const range = MOBILE_RANGE_KM[item.type];
+  lines.push(
+    item.mobile && range !== undefined
+      ? `Mobile: ${ownerName(item.owner)} may move it up to ${String(range)} km at a time, at sea.`
+      : 'Fixed to the map: moving it would be tampering with the map, not a move in the game.',
+  );
   if (garment.legendNote) lines.push(garment.legendNote);
   if (item.note) lines.push(item.note);
   return { title: item.name, lines };
@@ -86,6 +91,8 @@ const km = (n: number): string => `${n < 10 ? n.toFixed(1) : n.toFixed(0)} km`;
 /** One line for where a warhead first touched the court, and what it caught. */
 export function describeDetonation(d: Detonation, items: readonly TargetItem[] = TARGETS): string {
   const n = `Warhead ${String(d.warhead)}`;
+  if (d.struck)
+    return `${n} struck ${d.struck.label}. The apparatus is not the territory: off the map, and nothing scores.`;
   if (d.offMap) return `${n} came down off the map, where it does nothing.`;
   const court = d.court === undefined ? 'between the courts' : `on Court ${String(d.court)}`;
   const direct = d.hits.filter((h) => h.kind === 'direct').map((h) => h.item.name);
@@ -130,6 +137,8 @@ const millions = (n: number): string =>
 /** One line for the strike log: what a warhead hit and what it cost. */
 export function describeStrike(s: StrikeReport): string {
   const who = `${COMBATANTS[s.combatant].code}, warhead ${String(s.detonation.warhead)}`;
+  if (s.detonation.struck)
+    return `${who}: struck ${s.detonation.struck.label}. Off the map (the apparatus is not the territory), no effect.`;
   if (s.detonation.offMap) return `${who}: off the map, no effect.`;
   const parts: string[] = [];
   const hit = s.hits.map((h) => {

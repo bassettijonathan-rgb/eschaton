@@ -2,7 +2,9 @@
  * The lob: a launch order, its validation, the swing that turns it into a
  * flight, MIRV jockstraps, and where each warhead first touches the court.
  */
-import { garmentRects, distanceToRect, type GarmentRect } from './apparatus';
+import { garmentRects, distanceToRect, layoutApparatus, type GarmentRect } from './apparatus';
+import { apparatusSolids, firstStrike, type ApparatusSolid, type SolidKind } from './axiom';
+import { COMBATANTS } from './data/combatants';
 import { TARGETS } from './data/targets';
 import {
   TENNIS_BALL,
@@ -154,9 +156,20 @@ export interface Detonation {
   readonly at: CourtPoint;
   readonly lonLat: LonLat;
   readonly court: CourtNumber | undefined;
-  /** Off the theater altogether: not on the map. */
+  /** Off the theater altogether, or stopped by the apparatus: not on the map. */
   readonly offMap: boolean;
   readonly hits: readonly TargetHit[];
+  /** The apparatus the ball struck before it reached the court, if any (section 1.7). */
+  readonly struck?: StruckApparatus;
+}
+
+export interface StruckApparatus {
+  readonly id: string;
+  readonly kind: SolidKind;
+  readonly label: string;
+  readonly owner?: CombatantId;
+  /** Height above the court where it struck, m. */
+  readonly height: number;
 }
 
 export interface TargetHit {
@@ -211,6 +224,50 @@ export function adjudicateImpact(
   return { warhead, at, lonLat, court: courtAtPoint(at.x, at.y)?.number, offMap, hits };
 }
 
+/**
+ * What a ball meets that is not the map: a ball that strikes it stops there,
+ * off the map, and scores nothing.
+ */
+export function apparatusDetonation(
+  warhead: number,
+  solid: ApparatusSolid,
+  where: Vec3,
+): Detonation {
+  const at = { x: where.x, y: where.y };
+  return {
+    warhead,
+    at,
+    lonLat: unproject(at),
+    court: courtAtPoint(at.x, at.y)?.number,
+    offMap: true,
+    hits: [],
+    struck: {
+      id: solid.id,
+      kind: solid.kind,
+      label: solid.label,
+      height: where.z,
+      ...(solid.owner ? { owner: solid.owner } : {}),
+    },
+  };
+}
+
+const layoutSolids = new WeakMap<WorldSituation, ApparatusSolid[]>();
+/** The apparatus standing on the courts for a World Situation. */
+export function solidsFor(ws: WorldSituation): ApparatusSolid[] {
+  let solids = layoutSolids.get(ws);
+  if (!solids) {
+    solids = apparatusSolids(layoutApparatus(ws, COMBATANTS));
+    layoutSolids.set(ws, solids);
+  }
+  return solids;
+}
+
+/** The courts as a lob finds them: where the garments lie and what stands on them. */
+export interface LobWorld {
+  readonly items?: readonly TargetItem[];
+  readonly apparatus?: readonly ApparatusSolid[];
+}
+
 function originOf(platform: Platform): Vec3 {
   const p = project(platform.at);
   return vec(p.x, p.y, CONTACT_HEIGHT);
@@ -227,24 +284,51 @@ export function resolveLob(
   ws: WorldSituation,
   rng: Rng,
   killRadius: KillRadius = flatKillRadius,
+  world: LobWorld = {},
 ): LobResult {
-  const platform = platformsFor(order.combatant, ws).find((p) => p.id === order.platformId);
+  const items = world.items ?? TARGETS;
+  const platform = platformsFor(order.combatant, ws, items).find((p) => p.id === order.platformId);
   if (!platform) throw new Error(`no platform ${order.platformId} for ${order.combatant}`);
   const s = effectiveSwing(order.swing);
   const origin = originOf(platform);
-  const rects = garmentRects();
+  const rects = garmentRects(items);
+  // The map is not the territory: the apparatus stops a ball, and that is all.
+  const solids = world.apparatus ?? solidsFor(ws);
+  const flown = new Map<Flight, { solid: ApparatusSolid; where: Vec3 }>();
+  const fly = (body: Body, start: FlightState, stopAtApex = false): Flight => {
+    const strikes: { solid: ApparatusSolid; where: Vec3 }[] = [];
+    const obstacle = (a: Vec3, b: Vec3): number | undefined => {
+      const hit = firstStrike(a, b, solids);
+      if (!hit) return undefined;
+      const { f } = hit;
+      strikes.push({
+        solid: hit.solid,
+        where: vec(a.x + (b.x - a.x) * f, a.y + (b.y - a.y) * f, a.z + (b.z - a.z) * f),
+      });
+      return f;
+    };
+    const flight = simulate(body, start, { obstacle, stopAtApex });
+    const strike = strikes[0];
+    if (flight.obstructed && strike) flown.set(flight, strike);
+    return flight;
+  };
 
   let launch: Flight;
   let warheadFlights: Flight[];
   if (order.warheads === 1) {
-    launch = simulate(
-      TENNIS_BALL,
-      launchState(origin, s.bearing, s.elevation, s.speed, s.topspinRpm),
-    );
+    launch = fly(TENNIS_BALL, launchState(origin, s.bearing, s.elevation, s.speed, s.topspinRpm));
     warheadFlights = [launch];
   } else {
     const start = launchState(origin, s.bearing, s.elevation, s.speed, 0);
-    launch = simulate(jockstrapBody(order.warheads), start, { stopAtApex: true });
+    launch = fly(jockstrapBody(order.warheads), start, true);
+    const bus = flown.get(launch);
+    if (bus) {
+      // The jockstrap struck the apparatus before it opened: every warhead stops with it.
+      const detonations = Array.from({ length: order.warheads }, (_, i) =>
+        apparatusDetonation(i + 1, bus.solid, bus.where),
+      );
+      return { order, platform, launch, warheadFlights: [], detonations, outOfRange: 0 };
+    }
     warheadFlights = Array.from({ length: order.warheads }, () => {
       const angle = rng.next() * 2 * Math.PI;
       const push = Math.sqrt(rng.next()) * MIRV_SCATTER_SPEED;
@@ -258,13 +342,18 @@ export function resolveLob(
         ),
         spin: vec(0, 0, 0),
       };
-      return simulate(TENNIS_BALL, released);
+      return fly(TENNIS_BALL, released);
     });
   }
 
   let outOfRange = 0;
   const detonations: Detonation[] = [];
   warheadFlights.forEach((f, i) => {
+    const hit = flown.get(f);
+    if (hit) {
+      detonations.push(apparatusDetonation(i + 1, hit.solid, hit.where));
+      return;
+    }
     const at = { x: f.end.position.x, y: f.end.position.y };
     if (platform.kind === 'howitzer') {
       const km = courtMetresToKm(Math.hypot(at.x - origin.x, at.y - origin.y));

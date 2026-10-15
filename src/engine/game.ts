@@ -7,9 +7,14 @@
  * a quorum, the summit records pacts, then play is order-driven (A8): each
  * order is declared to the game-master, validated, lobbed and adjudicated
  * before the next. Messages go through the game-master over the hotline.
+ *
+ * Throughout, the map is not the territory (section 1.7): a ball that strikes
+ * the apparatus scores nothing, weather on the courts never reaches EndStat,
+ * and only submarines and carrier groups ever move.
  */
 import { ALLOCATION_METHOD_LABELS, allocate, type Allocation } from './allocation';
 import { distanceToRect, garmentRects } from './apparatus';
+import { checkMove, itemsNow } from './axiom';
 import { fillBuckets, takeFromBucket, type BallSupply } from './buckets';
 import { COMBATANTS } from './data/combatants';
 import { TARGETS } from './data/targets';
@@ -32,6 +37,7 @@ import type {
   CombatantId,
   LonLat,
   OwnerId,
+  Precipitation,
   TargetItem,
   WorldSituation,
 } from './types';
@@ -147,7 +153,15 @@ export type Action =
   | { readonly type: 'advanceClock'; readonly minutes: number }
   | { readonly type: 'agreeToEnd'; readonly by: CombatantId }
   | { readonly type: 'setHumanGod'; readonly on: boolean }
-  | { readonly type: 'rule'; readonly pending: number; readonly allow: boolean };
+  | { readonly type: 'rule'; readonly pending: number; readonly allow: boolean }
+  | {
+      readonly type: 'moveItem';
+      readonly by: CombatantId;
+      readonly item: string;
+      readonly to: LonLat;
+    }
+  | { readonly type: 'courtWeather'; readonly precipitation: Precipitation }
+  | { readonly type: 'weatherAppeal'; readonly by: CombatantId };
 
 /** An order or message waiting for a human game-master's ruling (A14). */
 export interface PendingRuling {
@@ -192,6 +206,10 @@ export interface GameState {
   readonly rng: readonly [number, number, number, number];
   readonly endstat: EndStatReport;
   readonly ended: GameEnd | undefined;
+  /** Where moved submarines and carrier groups now lie; everything else is where the map puts it. */
+  readonly positions: Readonly<Record<string, LonLat>>;
+  /** The real weather over the East Courts. EndStat never reads it. */
+  readonly courtWeather: Precipitation;
 }
 
 export interface Outcome {
@@ -261,7 +279,14 @@ export function newGame(
     rng: createRng(situation.seed + 1).state(),
     endstat: computeEndStat(situation, COMBATANTS, allocation, []),
     ended: undefined,
+    positions: {},
+    courtWeather: 'none',
   };
+}
+
+/** The garments as they lie in this game. */
+export function itemsOf(state: GameState): TargetItem[] {
+  return itemsNow(TARGETS, state.positions);
 }
 
 const refuse = (state: GameState, ...problems: string[]): Outcome => ({
@@ -308,8 +333,11 @@ export function declaredTarget(
 }
 
 /** Whom a declared aim is against: the owner of the target it names, or of the ground under it. */
-export function declaredVictim(aim: LonLat): OwnerId | undefined {
-  return declaredTarget(aim)?.owner ?? ownerAt(aim);
+export function declaredVictim(
+  aim: LonLat,
+  items: readonly TargetItem[] = TARGETS,
+): OwnerId | undefined {
+  return declaredTarget(aim, items)?.owner ?? ownerAt(aim);
 }
 
 export function bucketOf(state: GameState, id: CombatantId): number {
@@ -344,7 +372,7 @@ export function launchProblems(state: GameState, order: LaunchOrder): Problem[] 
   const ugc = state.beanie === 'red';
   const level = state.defcon[by] ?? STARTING_DEFCON;
   if (!order.aimAt) return [hard('Declare an aim point to the game-master first')];
-  const target = declaredTarget(order.aimAt);
+  const target = declaredTarget(order.aimAt, itemsOf(state));
   const victim = target?.owner ?? ownerAt(order.aimAt);
   const atCity = target?.type === 'MAMA';
   if (level < LAUNCH_DEFCON)
@@ -436,9 +464,12 @@ function checkEnd(state: GameState): GameState {
 
 function flyLaunch(state: GameState, order: LaunchOrder, ruledBy?: 'god'): Outcome {
   const rng = createRng(state.rng);
-  const lob = resolveLob(order, state.situation, rng, endstatKillRadius(state.situation));
+  const items = itemsOf(state);
+  const lob = resolveLob(order, state.situation, rng, endstatKillRadius(state.situation), {
+    items,
+  });
   const lobs = [...state.lobs, lob];
-  const endstat = computeEndStat(state.situation, COMBATANTS, state.allocation, lobs);
+  const endstat = computeEndStat(state.situation, COMBATANTS, state.allocation, lobs, items);
   let s: GameState = {
     ...state,
     rng: rng.state(),
@@ -466,6 +497,13 @@ function flyLaunch(state: GameState, order: LaunchOrder, ruledBy?: 'god'): Outco
     s,
     `${code(order.combatant)} lobs ${order.warheads === 1 ? 'a warhead' : `a jockstrap of ${String(order.warheads)}`} from ${platform?.name ?? order.platformId}.`,
   );
+  const struck = lob.detonations.filter((d) => d.struck);
+  const first = struck[0]?.struck;
+  if (first)
+    s = say(
+      s,
+      `${struck.length === 1 ? 'The ball' : `${String(struck.length)} warheads`} struck ${first.label}: the apparatus of the game, not the territory. Logged off the map; nothing scores.`,
+    );
 
   // Pacts the strike sets off or breaks.
   const newStrikes = endstat.strikes.filter((x) => x.order === lobs.length);
@@ -777,6 +815,49 @@ export function apply(state: GameState, action: Action): Outcome {
         say(
           { ...state, beanie: 'gray', cessation: undefined },
           'The game-master is back in the everyday beanie.',
+        ),
+      );
+    }
+
+    case 'moveItem': {
+      if (state.phase !== 'play') return refuse(state, 'Ships move only once play has started');
+      const p = needCombatant(action.by);
+      if (p.length) return refuse(state, ...p);
+      const item = itemsOf(state).find((t) => t.id === action.item);
+      if (!item) return refuse(state, 'There is no such garment on the map');
+      const check = checkMove(item, action.by, item.at, action.to);
+      if (!check.ok) return refuse(state, check.reason);
+      const s = say(
+        {
+          ...state,
+          positions: { ...state.positions, [item.id]: action.to },
+          clock: state.clock + MINUTES_PER_ORDER,
+        },
+        `${code(action.by)} moves ${item.name} to ${Math.abs(action.to.lat).toFixed(1)}°${action.to.lat >= 0 ? 'N' : 'S'} ${Math.abs(action.to.lon).toFixed(1)}°${action.to.lon >= 0 ? 'E' : 'W'}.`,
+      );
+      return done(checkEnd(s));
+    }
+
+    case 'courtWeather': {
+      if (state.phase === 'ended') return refuse(state, 'The game is over');
+      if (state.courtWeather === action.precipitation) return done(state);
+      const text =
+        action.precipitation === 'none'
+          ? 'The weather over the East Courts clears.'
+          : `${action.precipitation === 'snow' ? 'Snow starts' : 'Rain starts'} falling on the East Courts. It is falling on the map, not the territory: EndStat's weather is the World Situation's, and nothing changes.`;
+      return done(say({ ...state, courtWeather: action.precipitation }, text));
+    }
+
+    case 'weatherAppeal': {
+      if (state.phase === 'ended') return refuse(state, 'The game is over');
+      const p = needCombatant(action.by);
+      if (p.length) return refuse(state, ...p);
+      if (state.courtWeather === 'none')
+        return refuse(state, 'There is no weather on the courts to appeal about');
+      return done(
+        say(
+          state,
+          `${code(action.by)} demands that every kill radius be recalculated for the ${state.courtWeather}. Ruling: it is ${state.courtWeather === 'snow' ? 'snowing' : 'raining'} on the map, not the territory. Nothing is recalculated.`,
         ),
       );
     }
