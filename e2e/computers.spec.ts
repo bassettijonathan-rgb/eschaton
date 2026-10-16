@@ -8,15 +8,17 @@ test('the computers play a whole game, and EndStat confirms a winner', async ({ 
   await page.goto('/');
   await expect(page.locator('body')).toHaveAttribute('data-ready', 'true');
   await page.locator('#cpu-fast').check();
+  // The clipboard's button sits you in the pavilion to watch.
   await page.locator('#cpu-all').click();
+  await expect(page.locator('#spectator')).toBeVisible();
   await expect(page.locator('#game-panel')).toHaveAttribute('data-phase', 'summit', {
     timeout: 60_000,
   });
-  await expect(page.locator('#game-log')).toContainText('“');
+  await expect(page.locator('#commentary')).toContainText('“');
   await expect(page.locator('#game-panel')).toHaveAttribute('data-phase', 'ended', {
     timeout: 200_000,
   });
-  await expect(page.locator('#game-over')).toContainText(/EndStat confirms \w+ as the winner/);
+  await expect(page.locator('#spectator-leader')).toContainText(/\w+ wins/);
   expect(errors).toEqual([]);
 });
 

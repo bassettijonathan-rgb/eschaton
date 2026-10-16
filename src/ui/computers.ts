@@ -10,7 +10,10 @@ export const DEFAULT_SKILL = 0.8;
 
 let controllers: Controllers = { combatants: {}, gameMaster: false };
 let skill = DEFAULT_SKILL;
-let fast = false;
+/** How quickly the computers move: slow enough to follow, or fast. */
+export type Pace = 'slow' | 'normal' | 'fast';
+let pace: Pace = 'normal';
+let paused = false;
 const listeners = new Set<() => void>();
 const changed = (): void => {
   for (const fn of listeners) fn();
@@ -29,7 +32,15 @@ export function getSkill(): number {
 }
 
 export function isFast(): boolean {
-  return fast;
+  return pace === 'fast';
+}
+
+export function getPace(): Pace {
+  return pace;
+}
+
+export function isPaused(): boolean {
+  return paused;
 }
 
 export function setComputer(id: CombatantId, on: boolean): void {
@@ -56,7 +67,17 @@ export function setComputerGameMaster(on: boolean): void {
 }
 
 export function setFast(on: boolean): void {
-  fast = on;
+  setPace(on ? 'fast' : 'normal');
+}
+
+export function setPace(value: Pace): void {
+  pace = value;
+  changed();
+}
+
+/** Hold the computers where they are; a ball already in the air still lands. */
+export function setPaused(on: boolean): void {
+  paused = on;
   changed();
 }
 

@@ -20,6 +20,7 @@ const situation = scenarioById(
 let state: GameState = newGame(situation);
 let actions: Action[] = [];
 const listeners = new Set<(s: GameState) => void>();
+const actionListeners = new Set<(prev: GameState, action: Action, next: GameState) => void>();
 
 export function getState(): GameState {
   return state;
@@ -33,8 +34,10 @@ export function getActionLog(): readonly Action[] {
 export function dispatch(action: Action): Outcome {
   const outcome = apply(state, action);
   if (outcome.state !== state) {
+    const prev = state;
     state = outcome.state;
     actions = action.type === 'setMethod' && outcome.ok ? [action] : [...actions, action];
+    for (const fn of actionListeners) fn(prev, action, state);
     for (const fn of listeners) fn(state);
   }
   return outcome;
@@ -61,6 +64,14 @@ export function launch(order: LaunchOrder): LaunchOutcome {
 export function onStateChange(fn: (s: GameState) => void): () => void {
   listeners.add(fn);
   return () => listeners.delete(fn);
+}
+
+/** Every action that changed the game, with the game before and after it. */
+export function onAction(
+  fn: (prev: GameState, action: Action, next: GameState) => void,
+): () => void {
+  actionListeners.add(fn);
+  return () => actionListeners.delete(fn);
 }
 
 /** Start again from a fresh game (tests and the practice button use this). */

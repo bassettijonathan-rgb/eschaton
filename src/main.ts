@@ -24,7 +24,14 @@ import { mountInspector } from './ui/inspector';
 import { mountLegendPanel } from './ui/legendPanel';
 import { mountLobPanel, type LobPanelHooks } from './ui/lobPanel';
 import { dispatch, getState, launch, onStateChange } from './ui/store';
-import { getControllers, isFast, onComputersChange } from './ui/computers';
+import {
+  getControllers,
+  getPace,
+  isFast,
+  isPaused,
+  onComputersChange,
+  type Pace,
+} from './ui/computers';
 import { mountGamePanel } from './ui/gamePanel';
 import { mountHandOff } from './ui/handoff';
 import { getViewer, setViewer } from './ui/viewer';
@@ -32,6 +39,7 @@ import { mountYushityu } from './ui/yushityu';
 import { mountOnboarding } from './ui/onboarding';
 import { mountRulebook } from './ui/rulebook';
 import { onSoundChange, play, setSound, soundOn } from './ui/sound';
+import { mountSpectator, onWatchingChange, startWatching, watching } from './ui/spectator';
 import './style.css';
 
 declare global {
@@ -73,6 +81,14 @@ function findPickTag(object: THREE.Object3D | null): PickTag | undefined {
 
 /** Ask the person at the screen to click a spot on the courts; set once the courts are drawn. */
 let pickPoint: () => Promise<LonLat | undefined> = () => Promise.resolve(undefined);
+/** Tell the watcher how many balls have landed; set once the commentary is mounted. */
+let landedHook: (lobs: number) => void = () => undefined;
+
+/**
+ * When someone is watching, how long the computers wait after anything
+ * happens before their next move: long enough to read what just happened.
+ */
+const WATCH_GAP_MS: Readonly<Record<Pace, number>> = { slow: 4500, normal: 2200, fast: 150 };
 
 function start(container: HTMLElement): void {
   if (!webglAvailable()) {
@@ -159,6 +175,9 @@ function start(container: HTMLElement): void {
 
   // Play each new lob as it is flown, one after another.
   let played = 0;
+  let landed = 0;
+  /** When anything last happened that a watcher would want to take in. */
+  let lastEvent = performance.now();
   const queue: LobResult[] = [];
   const playNext = (): void => {
     const result = queue.shift();
@@ -168,11 +187,18 @@ function start(container: HTMLElement): void {
     }
     document.body.dataset['flying'] = 'true';
     play('pop');
+    // A watcher sees where the ball was meant to go: a line from the platform to the aim point.
+    if (watching() && result.order.aimAt)
+      aimPreview.show(project(result.platform.at), project(result.order.aimAt));
     flights.play(result, performance.now() / 1000, undefined, () => {
       lobPanel.showResult(result);
       plumes.update(getState().endstat);
       showSelected();
-      document.body.dataset['lobs'] = String(getState().lobs.length);
+      landed++;
+      lastEvent = performance.now();
+      if (watching()) aimPreview.show(undefined, undefined);
+      document.body.dataset['lobs'] = String(landed);
+      landedHook(landed);
       playNext();
     });
   };
@@ -210,9 +236,11 @@ function start(container: HTMLElement): void {
     showBeanie();
     showWeather();
     placeShips();
+    lastEvent = performance.now();
     if (s.lobs.length < played) {
       // A new game: clear the courts.
       played = 0;
+      landed = 0;
       queue.length = 0;
       flights.reset();
       plumes.update(s.endstat);
@@ -427,10 +455,12 @@ function start(container: HTMLElement): void {
     },
   };
 
-  // The computer players move one action at a time, between flights and hand-offs.
+  // The computer players move one action at a time, between flights and hand-offs,
+  // and leave a pause after each so that a watcher can follow.
   const computerMove = (): void => {
-    if (flights.busy() || queue.length > 0) return;
+    if (isPaused() || flights.busy() || queue.length > 0) return;
     if (document.getElementById('handoff')?.hidden === false) return;
+    if (watching() && performance.now() - lastEvent < WATCH_GAP_MS[getPace()]) return;
     const action = nextComputerAction(getState(), getControllers());
     if (action) dispatch(action);
   };
@@ -438,9 +468,13 @@ function start(container: HTMLElement): void {
   const pace = (): void => {
     flights.timeScale = isFast() ? 12 : 1;
     window.clearInterval(cpuTimer);
-    cpuTimer = window.setInterval(computerMove, isFast() ? 120 : 600);
+    cpuTimer = window.setInterval(computerMove, watching() ? 100 : isFast() ? 120 : 600);
   };
   onComputersChange(pace);
+  onWatchingChange((on) => {
+    if (!on) aimPreview.show(undefined, undefined);
+    pace();
+  });
   pace();
 
   // Draw only when something has changed: the camera, a ball in flight,
@@ -483,12 +517,25 @@ mountAllocationPanel(document.body);
 const yushityu = mountYushityu(document.body);
 mountGamePanel(document.body, { crunch: yushityu.crunch, pickPoint: () => pickPoint() });
 mountLegendPanel(document.body);
+const spectator = mountSpectator(document.body, { crunch: yushityu.crunch });
+landedHook = (n) => {
+  spectator.landed(n);
+};
 
-// The masthead's toolbar: the rulebook, the introduction and sound.
+// `?watch` in the address starts watching straight away.
+const watchNow = new URLSearchParams(window.location.search).has('watch');
+
+// The masthead's toolbar: watching, the rulebook, the introduction and sound.
 const rulebook = mountRulebook(document.body);
-const intro = mountOnboarding(document.body, () => {
-  rulebook.open();
+const intro = mountOnboarding(document.body, {
+  openRulebook: () => {
+    rulebook.open();
+  },
+  watch: startWatching,
+  skip: watchNow,
 });
+document.getElementById('watch-game')?.addEventListener('click', startWatching);
+if (watchNow) startWatching();
 document.getElementById('open-rulebook')?.addEventListener('click', () => {
   rulebook.open();
 });

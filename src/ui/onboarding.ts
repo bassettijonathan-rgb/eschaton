@@ -29,7 +29,7 @@ const CARDS: readonly { title: string; lines: readonly string[] }[] = [
     title: 'Running a game',
     lines: [
       'The game-master’s clipboard, "The game", runs everything in order: a quorum endorses the World Situation and agrees a TRIGSIT, the summit makes pacts, and then play begins.',
-      'Any Combatant can be played by the computer. "Watch the computers play a whole game" runs one from start to finish. "New game" can start the chapter’s own game, Interdependence Day.',
+      'Any Combatant can be played by the computer. "Watch a game", at the top of the page, hands every seat to the computer and explains each move as it happens, with a running score. "New game" can start the chapter’s own game, Interdependence Day.',
     ],
   },
   {
@@ -64,7 +64,15 @@ function markSeen(): void {
   }
 }
 
-export function mountOnboarding(host: HTMLElement, openRulebook: () => void): Onboarding {
+export interface OnboardingOptions {
+  openRulebook(): void;
+  /** Sit back and watch the computers play, with commentary. */
+  watch(): void;
+  /** Do not open on a first visit (someone came to watch). */
+  skip?: boolean;
+}
+
+export function mountOnboarding(host: HTMLElement, options: OnboardingOptions): Onboarding {
   let at = 0;
   const step = el('p', { className: 'welcome-step', id: 'welcome-step' });
   const title = el('h2', { id: 'welcome-title' });
@@ -73,11 +81,18 @@ export function mountOnboarding(host: HTMLElement, openRulebook: () => void): On
   const next = el('button', { type: 'button', id: 'welcome-next' }, ['Next']);
   const done = el('button', { type: 'button', id: 'welcome-done' }, ['Start playing']);
   const rules = el('button', { type: 'button', id: 'welcome-rules' }, ['Read the rulebook']);
+  const watch = el('button', { type: 'button', id: 'welcome-watch', className: 'primary' }, [
+    'Just watch a game',
+  ]);
   const dialog = el('dialog', { className: 'welcome', id: 'welcome' }, [
     step,
     title,
     body,
     el('div', { className: 'welcome-actions' }, [back, next, done, rules]),
+    el('p', { className: 'welcome-watch' }, [
+      watch,
+      ' The computer plays every side and explains each move.',
+    ]),
   ]);
   dialog.setAttribute('aria-labelledby', 'welcome-title');
   dialog.setAttribute('aria-describedby', 'welcome-step');
@@ -112,7 +127,12 @@ export function mountOnboarding(host: HTMLElement, openRulebook: () => void): On
   rules.addEventListener('click', () => {
     markSeen();
     dialog.close();
-    openRulebook();
+    options.openRulebook();
+  });
+  watch.addEventListener('click', () => {
+    markSeen();
+    dialog.close();
+    options.watch();
   });
   dialog.addEventListener('cancel', markSeen);
 
@@ -121,6 +141,6 @@ export function mountOnboarding(host: HTMLElement, openRulebook: () => void): On
     if (!dialog.open) dialog.showModal();
     show();
   };
-  if (!seen()) open();
+  if (!seen() && !options.skip) open();
   return { open };
 }

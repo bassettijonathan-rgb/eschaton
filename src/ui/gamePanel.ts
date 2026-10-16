@@ -32,8 +32,8 @@ import { destinationPoint } from '../engine/projection';
 import { codeOf } from '../engine/scenario';
 import type { CombatantId, LonLat, Precipitation } from '../engine/types';
 import { el } from './dom';
+import { startWatching } from './spectator';
 import {
-  computerPlaysAll,
   getControllers,
   getSkill,
   isComputer,
@@ -581,7 +581,7 @@ export function mountGamePanel(host: HTMLElement, options: GamePanelOptions): vo
       ]),
       el('label', { htmlFor: 'cpu-fast', className: 'game-row' }, [fast, ' Fast flights']),
       button('Watch the computers play a whole game', 'cpu-all', () => {
-        computerPlaysAll(s.situation.combatants);
+        startWatching();
       }),
     ];
   };
