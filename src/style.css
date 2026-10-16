@@ -770,3 +770,236 @@ dialog.welcome {
 .welcome-actions [hidden] {
   display: none;
 }
+
+/* Watching a game from the pavilion. */
+.toolbar button.primary,
+.welcome button.primary,
+.spectator-ending button {
+  background: var(--eta-red);
+  color: #fff;
+  border: 1px solid var(--eta-red);
+  font-weight: bold;
+}
+
+.welcome-watch {
+  margin: 14px 0 0;
+  padding-top: 12px;
+  border-top: 1px solid rgba(29, 35, 38, 0.15);
+  color: var(--eta-gray);
+  font-size: 0.9rem;
+}
+
+body[data-watching='true'] #game-panel,
+body[data-watching='true'] #lob-panel,
+body[data-watching='true'] .viewer-pick,
+body[data-watching='true'] #watch-game {
+  display: none;
+}
+
+.spectator-panel {
+  top: 150px;
+  bottom: auto;
+  width: min(27rem, calc(100vw - 32px));
+  max-height: calc(100vh - 230px);
+  border-left-color: var(--eta-red);
+}
+
+.spectator-panel[hidden],
+.spectator-caption[hidden],
+.spectator-ending[hidden] {
+  display: none;
+}
+
+.spectator-panel h2 {
+  margin: 2px 0 6px;
+  font-size: 1rem;
+}
+
+.spectator-panel h3 {
+  margin: 12px 0 4px;
+  font-size: 0.85rem;
+}
+
+.phase-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  margin: 0 0 6px;
+  padding: 0;
+  list-style: none;
+  counter-reset: step;
+}
+
+.phase-steps li {
+  padding: 1px 7px;
+  border: 1px solid rgba(29, 35, 38, 0.25);
+  color: var(--eta-gray);
+}
+
+.phase-steps li.done {
+  color: var(--ink);
+}
+
+.phase-steps li.now {
+  background: var(--eta-red);
+  border-color: var(--eta-red);
+  color: #fff;
+  font-weight: bold;
+}
+
+.spectator-clock {
+  margin: 4px 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.spectator-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  margin: 6px 0;
+}
+
+.spectator-controls button,
+.spectator-controls select,
+.spectator-ending button {
+  font: inherit;
+  padding: 2px 10px;
+  cursor: pointer;
+}
+
+.spectator-controls #spectator-leave {
+  margin-left: auto;
+}
+
+.spectator-about {
+  margin: 6px 0;
+  padding: 6px 8px;
+  background: rgba(29, 35, 38, 0.06);
+  line-height: 1.45;
+}
+
+.spectator-leader {
+  margin: 4px 0;
+  font-weight: bold;
+}
+
+.spectator-score {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.spectator-score th,
+.spectator-score td {
+  padding: 2px 4px;
+  border-bottom: 1px solid rgba(29, 35, 38, 0.15);
+  text-align: left;
+}
+
+.spectator-score .num {
+  text-align: right;
+}
+
+.spectator-score tr.leads {
+  background: rgba(242, 183, 5, 0.25);
+}
+
+.leads-tag {
+  color: var(--eta-red);
+  font-size: 0.75rem;
+  font-weight: bold;
+}
+
+.spectator-ending {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0;
+}
+
+.commentary {
+  margin: 4px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.commentary li {
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(29, 35, 38, 0.1);
+  line-height: 1.4;
+}
+
+.commentary li:first-child {
+  font-weight: bold;
+}
+
+.commentary .swatch {
+  width: 10px;
+  height: 10px;
+  margin-right: 4px;
+}
+
+.comment-at {
+  color: var(--eta-gray);
+  font-variant-numeric: tabular-nums;
+}
+
+.comment-phase {
+  font-style: italic;
+}
+
+.comment-end {
+  color: var(--eta-red);
+}
+
+/* What the ball in the air is for, and what it did, over the courts. */
+.spectator-caption {
+  position: fixed;
+  top: 140px;
+  left: calc(50% + 7rem);
+  transform: translateX(-50%);
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  width: max-content;
+  max-width: min(36rem, calc(100vw - 32rem));
+  padding: 8px 14px;
+  background: rgba(29, 35, 38, 0.86);
+  color: #fff;
+  font-size: 1rem;
+  line-height: 1.4;
+  pointer-events: none;
+}
+
+.spectator-caption[data-kind='end'] {
+  background: rgba(163, 32, 43, 0.92);
+  font-weight: bold;
+}
+
+@media (max-width: 1000px) {
+  .spectator-panel {
+    top: 215px;
+    max-height: calc(100vh - 300px);
+  }
+  .spectator-caption {
+    top: auto;
+    bottom: 70px;
+    left: 16px;
+    right: 16px;
+    transform: none;
+    width: auto;
+    max-width: none;
+    font-size: 0.9rem;
+  }
+}
+
+@media (max-width: 700px) {
+  .spectator-panel {
+    max-height: 40vh;
+  }
+  /* The bottom bars wrap onto two rows here. */
+  .spectator-caption {
+    bottom: 120px;
+  }
+}

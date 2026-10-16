@@ -117,6 +117,11 @@ export function describeDetonation(d: Detonation, items: readonly TargetItem[] =
       `${direct.length > 0 ? 'also catches' : 'catches'} ${indirect.join(', ')} in its kill radius`,
     );
   if (parts.length > 0) return `${n} ${court}: ${parts.join('; ')}.`;
+  return `${n} ${court}: landed ${whereItLanded(d, items)}, with nothing in reach.`;
+}
+
+/** Where a warhead came down, for one that caught nothing: "in Russia, 83 km from Kursk reactor". */
+export function whereItLanded(d: Detonation, items: readonly TargetItem[] = TARGETS): string {
   const where = territoryAt(d.lonLat)?.name;
   let nearest: TargetItem | undefined;
   let best = Infinity;
@@ -128,8 +133,7 @@ export function describeDetonation(d: Detonation, items: readonly TargetItem[] =
     }
   }
   const place = where ? `in ${where}` : 'at sea';
-  const near = nearest ? `, ${km(best)} from ${nearest.name}` : '';
-  return `${n} ${court}: landed ${place}${near}, with nothing in reach.`;
+  return nearest ? `${place}, ${km(best)} from ${nearest.name}` : place;
 }
 
 export function describeLob(r: LobResult): Description {
