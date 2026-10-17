@@ -1003,3 +1003,70 @@ body[data-watching='true'] #watch-game {
     bottom: 120px;
   }
 }
+
+/* Watching: the controls stay in reach at the top of the panel. */
+.spectator-panel .spectator-controls {
+  position: sticky;
+  top: -8px;
+  z-index: 1;
+  margin: -8px -12px 8px;
+  padding: 8px 12px;
+  background: rgba(244, 241, 232, 0.98);
+  border-bottom: 1px solid rgba(29, 35, 38, 0.15);
+}
+
+.spectator-controls label {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.spectator-controls button.big {
+  padding: 6px 14px;
+  font-size: 1rem;
+  font-weight: bold;
+}
+
+.spectator-controls button.go {
+  background: var(--eta-red);
+  border: 1px solid var(--eta-red);
+  color: #fff;
+}
+
+.spectator-caption[data-kind='paused'] {
+  background: rgba(163, 32, 43, 0.92);
+}
+
+/* Watching needs none of the game-master's tools. */
+body[data-watching='true'] #allocation-panel,
+body[data-watching='true'] #endstat-panel,
+body[data-watching='true'] .masthead p:last-of-type,
+body[data-watching='true'] .toolbar .finder {
+  display: none;
+}
+
+/* On a phone, the masthead shrinks to its title and the panel sits along the bottom. */
+@media (max-width: 700px) {
+  body[data-watching='true'] .masthead p,
+  body[data-watching='true'] #legend-panel {
+    display: none;
+  }
+  body[data-watching='true'] .masthead h1 {
+    margin: 0;
+  }
+  body[data-watching='true'] .spectator-panel {
+    top: auto;
+    left: 8px;
+    right: 8px;
+    bottom: 8px;
+    width: auto;
+    max-width: none;
+    max-height: 52vh;
+  }
+  body[data-watching='true'] .spectator-caption {
+    top: 108px;
+    bottom: auto;
+    left: 8px;
+    right: 8px;
+  }
+}

@@ -11,18 +11,19 @@ game-master wears the beanie and runs EndStat, and the map is not the territory.
 
 **Play it at <https://bassettijonathan-rgb.github.io/eschaton/>.**
 
-**Or just watch one: <https://bassettijonathan-rgb.github.io/eschaton/?watch>.** "Watch a
-game", at the top of the page or on the first card of the introduction, hands every seat
-and the table to the computer and sits you in the pavilion. The game-master's clipboard
-gives way to a running commentary: what each phase is for, what each team says at the
-summit and what it really holds, which pacts are made and what they mean, and, for every
-ball, where it was lobbed from, what it was aimed at and why, and what it did when it
-landed. A dashed line on the courts runs from the launch platform to the aim point while
-the ball is in the air, and a caption over the courts says the latest. A scoreboard keeps
-each team's alert, the balls left in its bucket, harm done, harm suffered and the ratio
-EndStat ranks by, with the leader marked, and the game ends with why the winner won (and
-why the team that did the most harm did not). Pause, a slow, normal or fast pace, and
-"Watch it again" or the other World Situation are on the panel.
+**The page opens on watching a game.** Press **▶ Start** and the computer plays every
+side, from the World Situation to EndStat's winner; **⏸ Pause** holds it and **↺ Start
+over** begins a fresh game. A running commentary says what each phase is for, what each
+team says at the summit and what it really holds, which pacts are made and what they
+mean, and, for every ball, where it was lobbed from, what it was aimed at and why, and
+what it did when it landed. A dashed line on the courts runs from the launch platform to
+the aim point while the ball is in the air, and a caption over the courts says the
+latest. A scoreboard keeps each team's alert, the balls left in its bucket, harm done,
+harm suffered and the ratio EndStat ranks by, with the leader marked, and the game ends
+with why the winner won (and why the team that did the most harm did not). The pace can
+be slow, normal or fast. **Play it yourself** opens the game-master's clipboard instead,
+and the page remembers the choice; "Watch a game" at the top goes back, and `?watch` or
+`?play` in the address picks one.
 
 The page draws the four courts with the world on them, every target garment, the
 players, their buckets and Lord's cart; clicking a garment names what it is on

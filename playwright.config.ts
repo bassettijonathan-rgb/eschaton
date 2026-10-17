@@ -11,10 +11,19 @@ export default defineConfig({
   use: {
     baseURL,
     trace: 'retain-on-failure',
-    // Tests play as returning visitors, so the introduction does not cover the courts.
+    // Tests play as returning visitors who chose to play, so the introduction does not
+    // cover the courts and the page opens on the game-master's clipboard.
     storageState: {
       cookies: [],
-      origins: [{ origin: baseURL, localStorage: [{ name: 'eschaton-intro-seen', value: 'yes' }] }],
+      origins: [
+        {
+          origin: baseURL,
+          localStorage: [
+            { name: 'eschaton-intro-seen', value: 'yes' },
+            { name: 'eschaton-landing', value: 'play' },
+          ],
+        },
+      ],
     },
   },
   projects: [

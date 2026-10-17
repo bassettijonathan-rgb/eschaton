@@ -30,6 +30,7 @@ import {
   isFast,
   isPaused,
   onComputersChange,
+  setPaused,
   type Pace,
 } from './ui/computers';
 import { mountGamePanel } from './ui/gamePanel';
@@ -39,7 +40,13 @@ import { mountYushityu } from './ui/yushityu';
 import { mountOnboarding } from './ui/onboarding';
 import { mountRulebook } from './ui/rulebook';
 import { onSoundChange, play, setSound, soundOn } from './ui/sound';
-import { mountSpectator, onWatchingChange, startWatching, watching } from './ui/spectator';
+import {
+  landsOnWatching,
+  mountSpectator,
+  onWatchingChange,
+  startWatching,
+  watching,
+} from './ui/spectator';
 import './style.css';
 
 declare global {
@@ -522,8 +529,9 @@ landedHook = (n) => {
   spectator.landed(n);
 };
 
-// `?watch` in the address starts watching straight away.
-const watchNow = new URLSearchParams(window.location.search).has('watch');
+// The page opens on watching, unless the person chose to play (or the address says `?play`).
+const params = new URLSearchParams(window.location.search);
+const watchNow = landsOnWatching(params);
 
 // The masthead's toolbar: watching, the rulebook, the introduction and sound.
 const rulebook = mountRulebook(document.body);
@@ -531,8 +539,11 @@ const intro = mountOnboarding(document.body, {
   openRulebook: () => {
     rulebook.open();
   },
-  watch: startWatching,
-  skip: watchNow,
+  watch: () => {
+    startWatching();
+    setPaused(false);
+  },
+  skip: params.has('watch'),
 });
 document.getElementById('watch-game')?.addEventListener('click', startWatching);
 if (watchNow) startWatching();

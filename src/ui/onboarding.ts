@@ -29,7 +29,7 @@ const CARDS: readonly { title: string; lines: readonly string[] }[] = [
     title: 'Running a game',
     lines: [
       'The game-master’s clipboard, "The game", runs everything in order: a quorum endorses the World Situation and agrees a TRIGSIT, the summit makes pacts, and then play begins.',
-      'Any Combatant can be played by the computer. "Watch a game", at the top of the page, hands every seat to the computer and explains each move as it happens, with a running score. "New game" can start the chapter’s own game, Interdependence Day.',
+      'Any Combatant can be played by the computer. The page opens on watching: press ▶ Start and the computer plays every side, explaining each move as it happens, with a running score. "Play it yourself" opens this clipboard. "New game" can start the chapter’s own game, Interdependence Day.',
     ],
   },
   {
