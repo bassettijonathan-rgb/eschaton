@@ -33,7 +33,7 @@ import {
   type Pace,
 } from './computers';
 import { el } from './dom';
-import { getState, onAction, onStateChange } from './store';
+import { getActionLog, getState, onAction, onStateChange, resetGame } from './store';
 import { setViewer } from './viewer';
 
 const PHASES: readonly { phase: Phase; label: string }[] = [
@@ -56,6 +56,30 @@ const KEEP = 60;
 let watchingNow = false;
 const listeners = new Set<(on: boolean) => void>();
 
+const LANDING_KEY = 'eschaton-landing';
+
+/** Whether the page opens on watching (the default) or on the game-master's clipboard. */
+export function landsOnWatching(params: URLSearchParams): boolean {
+  if (params.has('watch')) return true;
+  if (params.has('play')) return false;
+  try {
+    return globalThis.localStorage.getItem(LANDING_KEY) !== 'play';
+  } catch {
+    return true;
+  }
+}
+
+function rememberLanding(where: 'watch' | 'play'): void {
+  try {
+    globalThis.localStorage.setItem(LANDING_KEY, where);
+  } catch {
+    // Without storage the page simply opens on watching.
+  }
+}
+
+/** Nothing has happened yet: the game waits for Start. */
+const notStarted = (): boolean => getActionLog().length === 0;
+
 export function watching(): boolean {
   return watchingNow;
 }
@@ -65,11 +89,15 @@ export function onWatchingChange(fn: (on: boolean) => void): () => void {
   return () => listeners.delete(fn);
 }
 
-/** Hand every seat and the table to the computer, and sit in the pavilion. */
+/**
+ * Hand every seat and the table to the computer, and sit in the pavilion. A
+ * game that has not begun waits for Start; one under way carries on.
+ */
 export function startWatching(): void {
   setViewer(GAME_MASTER);
   computerPlaysAll(getState().situation.combatants);
-  setPaused(false);
+  setPaused(notStarted());
+  rememberLanding('watch');
   watchingNow = true;
   document.body.dataset['watching'] = 'true';
   for (const fn of listeners) fn(true);
@@ -78,6 +106,7 @@ export function startWatching(): void {
 /** Back to the clipboard; the computers keep their seats until someone takes them. */
 export function stopWatching(): void {
   setPaused(false);
+  rememberLanding('play');
   watchingNow = false;
   document.body.dataset['watching'] = 'false';
   for (const fn of listeners) fn(false);
@@ -111,13 +140,16 @@ export function mountSpectator(host: HTMLElement, options: SpectatorOptions): Sp
   const title = el('h2', { id: 'spectator-title' });
   const steps = el('ol', { className: 'phase-steps', id: 'phase-steps' });
   const clock = el('p', { className: 'spectator-clock', id: 'spectator-clock' });
-  const pause = el('button', { type: 'button', id: 'spectator-pause' });
+  const play = el('button', { type: 'button', id: 'spectator-play', className: 'big' });
+  const restart = el('button', { type: 'button', id: 'spectator-restart', className: 'big' }, [
+    '↺ Start over',
+  ]);
   const pace = el(
     'select',
     { id: 'spectator-pace' },
     PACES.map((p) => el('option', { value: p.value }, [p.label])),
   );
-  const leave = el('button', { type: 'button', id: 'spectator-leave' }, ['Back to the clipboard']);
+  const leave = el('button', { type: 'button', id: 'spectator-leave' }, ['Play it yourself']);
   const about = el('p', { className: 'spectator-about', id: 'spectator-about' });
   const leader = el('p', { className: 'spectator-leader', id: 'spectator-leader' });
   const scoreBody = el('tbody', {});
@@ -148,16 +180,15 @@ export function mountSpectator(host: HTMLElement, options: SpectatorOptions): Sp
     'section',
     { className: 'panel spectator-panel', id: 'spectator', hidden: true },
     [
+      el('div', { className: 'spectator-controls' }, [
+        play,
+        restart,
+        el('label', { htmlFor: 'spectator-pace' }, ['Speed ', pace]),
+        leave,
+      ]),
       title,
       steps,
       clock,
-      el('div', { className: 'spectator-controls' }, [
-        pause,
-        el('label', { htmlFor: 'spectator-pace' }, [' Speed ']),
-        pace,
-        ' ',
-        leave,
-      ]),
       about,
       el('h3', {}, ['The score']),
       leader,
@@ -206,7 +237,15 @@ export function mountSpectator(host: HTMLElement, options: SpectatorOptions): Sp
     );
     const last = lines.filter((c) => c.kind !== 'phase').at(-1) ?? lines.at(-1);
     caption.replaceChildren();
-    if (last && watchingNow) {
+    if (watchingNow && isPaused()) {
+      caption.append(
+        notStarted()
+          ? 'Press ▶ Start to watch the computer play every side of a whole game. Each move is explained as it happens.'
+          : 'Paused. Press ▶ Resume to carry on.',
+      );
+      caption.dataset['kind'] = 'paused';
+      caption.hidden = false;
+    } else if (last && watchingNow) {
       caption.append(swatch(last.by), last.text);
       caption.dataset['kind'] = last.kind;
       caption.hidden = false;
@@ -258,10 +297,8 @@ export function mountSpectator(host: HTMLElement, options: SpectatorOptions): Sp
       crunch.addEventListener('click', () => {
         options.crunch();
       });
-      const again = SCENARIOS.map((x) => {
-        const b = el('button', { type: 'button', className: 'watch-again' }, [
-          x.id === s.situation.id ? 'Watch it again' : `Watch ${x.title}`,
-        ]);
+      const again = SCENARIOS.filter((x) => x.id !== s.situation.id).map((x) => {
+        const b = el('button', { type: 'button', className: 'watch-again' }, [`Watch ${x.title}`]);
         b.dataset['scenario'] = x.id;
         b.addEventListener('click', () => {
           window.location.assign(watchUrl(x.id));
@@ -273,10 +310,13 @@ export function mountSpectator(host: HTMLElement, options: SpectatorOptions): Sp
   };
 
   const renderControls = (): void => {
-    pause.textContent = isPaused() ? 'Resume' : 'Pause';
-    pause.setAttribute('aria-pressed', String(isPaused()));
+    const paused = isPaused();
+    const fresh = notStarted();
+    play.textContent = paused ? (fresh ? '▶ Start' : '▶ Resume') : '⏸ Pause';
+    play.classList.toggle('go', paused);
+    restart.disabled = fresh;
     pace.value = getPace();
-    panel.dataset['paused'] = String(isPaused());
+    panel.dataset['paused'] = String(paused);
   };
 
   /** Bring the scoreboard up to date once every ball in the air has landed. */
@@ -285,6 +325,22 @@ export function mountSpectator(host: HTMLElement, options: SpectatorOptions): Sp
     if (s.lobs.length <= landedLobs) shown = s;
     renderScore();
     renderFeed();
+    renderControls();
+  };
+
+  /** Back to the World Situation with a fresh game, and play it straight away. */
+  const startOver = (): void => {
+    resetGame();
+    comments = [
+      {
+        at: getState().clock,
+        text: explainPhase(getState().phase, getState()),
+        kind: 'phase',
+        afterLobs: 0,
+      },
+    ];
+    setPaused(false);
+    catchUp();
   };
 
   onAction((prev, action, next) => {
@@ -300,16 +356,20 @@ export function mountSpectator(host: HTMLElement, options: SpectatorOptions): Sp
     seenLog = s.log.length;
     catchUp();
   });
-  pause.addEventListener('click', () => {
+  play.addEventListener('click', () => {
     setPaused(!isPaused());
   });
+  restart.addEventListener('click', startOver);
   pace.addEventListener('change', () => {
     setPace(pace.value as Pace);
   });
   leave.addEventListener('click', () => {
     stopWatching();
   });
-  onComputersChange(renderControls);
+  onComputersChange(() => {
+    renderControls();
+    renderFeed();
+  });
   onWatchingChange((on) => {
     panel.hidden = !on;
     if (on) {

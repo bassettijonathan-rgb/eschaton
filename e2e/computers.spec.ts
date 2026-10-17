@@ -11,6 +11,7 @@ test('the computers play a whole game, and EndStat confirms a winner', async ({ 
   // The clipboard's button sits you in the pavilion to watch.
   await page.locator('#cpu-all').click();
   await expect(page.locator('#spectator')).toBeVisible();
+  await page.locator('#spectator-play').click();
   await expect(page.locator('#game-panel')).toHaveAttribute('data-phase', 'summit', {
     timeout: 60_000,
   });
